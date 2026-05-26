@@ -4,7 +4,7 @@ English version: [README.md](./README.md)
 
 先看官方的 Razer Web 驱动：
 
-[http://synapse.razer.com/](http://synapse.razer.com/)
+[https://synapse.razer.com/](https://synapse.razer.com/)
 
 如果你的鼠标刚好被它支持，那它应该是第一选择。问题也很现实：它支持的设备还是偏少，很多鼠标不在支持列表里。这个项目就是从这个缺口里长出来的。
 

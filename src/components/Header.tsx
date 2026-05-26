@@ -81,7 +81,7 @@ export function Header({
   return (
     <header className="topBar">
       <div className="brandLockup">
-        <img aria-hidden="true" className="brandLogo" src="/logo.svg" alt="" />
+        <img aria-hidden="true" className="brandLogo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
         <div className="brandText">
           <p className="eyebrow">{t("app.eyebrow")}</p>
           <h1>Snap Razer</h1>

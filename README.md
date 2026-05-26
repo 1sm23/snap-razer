@@ -4,7 +4,7 @@ Chinese version: [README.zh-CN.md](./README.zh-CN.md)
 
 Start with the official Razer web driver:
 
-[http://synapse.razer.com/](http://synapse.razer.com/)
+[https://synapse.razer.com/](https://synapse.razer.com/)
 
 If your mouse is supported there, that is the first place to try. The catch is simple: its device coverage is still pretty small, and a lot of mice do not show up at all. This project came out of that gap.
 
