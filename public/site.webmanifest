@@ -2,12 +2,24 @@
   "name": "Snap Razer",
   "short_name": "Snap Razer",
   "description": "A WebHID console and Razer Web Driver companion for discovering and controlling supported Razer HID devices.",
-  "start_url": "/snap-razer/",
-  "scope": "/snap-razer/",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#f6f8f4",
   "theme_color": "#44d62c",
   "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "logo.svg",
       "sizes": "any",

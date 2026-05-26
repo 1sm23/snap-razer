@@ -5,6 +5,7 @@ import { CapabilityMatrix } from "./components/CapabilityMatrix";
 import { DebugLog } from "./components/DebugLog";
 import { FeaturePanels } from "./components/FeaturePanels";
 import { Header } from "./components/Header";
+import { toast } from "./components/ui/use-toast";
 import { createInitialCapabilities, didAllActiveProbesFail, markWritableInterfaceUnavailable } from "./domain/capabilities";
 import { runCapabilityProbe } from "./domain/capabilityProbe";
 import type { CapabilityMap, ConnectedDevice, HidLogEntry, LocalizedMessage } from "./domain/types";
@@ -27,6 +28,7 @@ import {
 import { HidTransport } from "./hid/hidTransport";
 import { useI18n } from "./i18n";
 import type { MessageKey } from "./i18n";
+import { isStandaloneApp, type BeforeInstallPromptEvent } from "./pwa";
 import {
   readSystemThemeMode,
   readThemeMode,
@@ -71,6 +73,8 @@ export default function App() {
   const [logs, setLogs] = useState<HidLogEntry[]>([]);
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(() => (typeof window === "undefined" ? false : isStandaloneApp()));
   const [connecting, setConnecting] = useState(false);
   const [applyingDpi, setApplyingDpi] = useState(false);
   const [applyingPollingRate, setApplyingPollingRate] = useState(false);
@@ -114,6 +118,26 @@ export default function App() {
   useEffect(() => {
     currentDeviceRef.current = device;
   }, [device]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+      setInstalled(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
 
   const connect = useCallback(async (mode: "authorized" | "request") => {
     const hasCurrentDevice = currentDeviceRef.current !== null;
@@ -375,6 +399,27 @@ export default function App() {
     setDebugPanelOpen(false);
   }
 
+  async function handleInstallApp() {
+    if (!installPrompt) {
+      toast({
+        title: t("settings.installAppUnavailable")
+      });
+      return;
+    }
+
+    const promptEvent = installPrompt;
+    setInstallPrompt(null);
+    await promptEvent.prompt();
+    const choice = await promptEvent.userChoice;
+
+    if (choice.outcome === "accepted") {
+      setInstalled(true);
+      toast({
+        title: t("settings.installAppSuccess")
+      });
+    }
+  }
+
   function handleButtonMappingChange(buttonId: string, action: ButtonMapping["action"]) {
     setButtonMappings((currentMappings) => {
       const nextMappings = updateButtonMapping(currentMappings, buttonId, action);
@@ -407,9 +452,11 @@ export default function App() {
         themeMode={themeMode}
         resolvedThemeMode={resolvedThemeMode}
         debugEnabled={debugEnabled}
+        installAvailable={!installed}
         onConnect={handleConnect}
         onDisconnect={handleDisconnect}
         onDebugEnabledChange={handleDebugEnabledChange}
+        onInstallApp={handleInstallApp}
         onThemeModeChange={setThemeMode}
         onToggleTheme={handleToggleTheme}
       />

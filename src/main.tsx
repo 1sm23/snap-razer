@@ -7,6 +7,9 @@ import App from "./App";
 import "./App.css";
 import { Toaster } from "./components/ui/toaster";
 import { I18nProvider } from "./i18n";
+import { registerServiceWorker } from "./pwa";
+
+registerServiceWorker();
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>

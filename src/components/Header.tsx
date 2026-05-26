@@ -1,6 +1,7 @@
 import { Icon } from "@iconify/react";
 import chevronDownIcon from "@iconify-icons/lucide/chevron-down";
 import chevronRightIcon from "@iconify-icons/lucide/chevron-right";
+import downloadIcon from "@iconify-icons/lucide/download";
 import externalLinkIcon from "@iconify-icons/lucide/external-link";
 import helpCircleIcon from "@iconify-icons/lucide/help-circle";
 import languagesIcon from "@iconify-icons/lucide/languages";
@@ -35,9 +36,11 @@ interface HeaderProps {
   themeMode: ThemeMode;
   resolvedThemeMode: ResolvedThemeMode;
   debugEnabled: boolean;
+  installAvailable: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
   onDebugEnabledChange: (enabled: boolean) => void;
+  onInstallApp: () => void;
   onThemeModeChange: (themeMode: ThemeMode) => void;
   onToggleTheme: (origin: { x: number; y: number }) => void;
 }
@@ -50,9 +53,11 @@ export function Header({
   themeMode,
   resolvedThemeMode,
   debugEnabled,
+  installAvailable,
   onConnect,
   onDisconnect,
   onDebugEnabledChange,
+  onInstallApp,
   onThemeModeChange,
   onToggleTheme
 }: HeaderProps) {
@@ -175,6 +180,14 @@ export function Header({
                   onClick={() => onDebugEnabledChange(!debugEnabled)}
                 />
               </div>
+              {installAvailable ? (
+                <DropdownMenuItem onSelect={onInstallApp}>
+                  <span>
+                    <Icon aria-hidden="true" className="settingsMenuIcon" height={16} icon={downloadIcon} width={16} />
+                    {t("settings.installApp")}
+                  </span>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem asChild>
                 <a href={githubUrl} rel="noreferrer" target="_blank">
                   <span>
