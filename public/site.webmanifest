@@ -1,7 +1,7 @@
 {
   "name": "Snap Razer",
   "short_name": "Snap Razer",
-  "description": "A WebHID console for discovering and controlling supported Razer HID devices.",
+  "description": "A WebHID console and Razer Web Driver companion for discovering and controlling supported Razer HID devices.",
   "start_url": "/snap-razer/",
   "scope": "/snap-razer/",
   "display": "standalone",
