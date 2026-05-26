@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://1sm23.github.io/snap-razer/sitemap.xml
