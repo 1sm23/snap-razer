@@ -276,11 +276,11 @@ h2 {
 }
 
 .connectionButtonMain.ui-button {
-  border-radius: 6px 0 0 6px;
+  border-radius: 6px;
 }
 
-.connectionButtonMain.ui-button:only-child {
-  border-radius: 6px;
+.connectionButtonGroupConnected .connectionButtonMain.ui-button {
+  border-radius: 6px 0 0 6px;
 }
 
 .connectionButtonMenu.ui-button {
@@ -350,24 +350,6 @@ h2 {
 
 .errorText {
   color: var(--danger);
-}
-
-.connectionFaq {
-  color: var(--muted);
-  font-size: 0.82rem;
-  max-width: 360px;
-  text-align: left;
-  width: min(100%, 360px);
-}
-
-.connectionFaq summary {
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.connectionFaq p {
-  line-height: 1.45;
-  margin: 6px 0 0;
 }
 
 .ui-button-size-icon:hover {
@@ -779,6 +761,36 @@ h2 {
   flex: 0 0 auto;
 }
 
+.buttonMappingTitleLine {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.buttonMappingMode {
+  background: color-mix(in srgb, var(--status-warning) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 45%, var(--border));
+  border-radius: 999px;
+  color: var(--text-strong);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  margin: 0;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.buttonMappingActions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .buttonMappingNotice {
   background: color-mix(in srgb, var(--status-info) 18%, var(--panel-subtle));
   border: 1px solid color-mix(in srgb, var(--status-info) 38%, var(--border));
@@ -860,6 +872,15 @@ h2 {
   display: grid;
   gap: 12px;
   grid-template-columns: 44px minmax(0, 1fr) 52px 50px;
+  margin: -6px -8px;
+  padding: 6px 8px;
+  transition: background-color 160ms ease;
+}
+
+.dpiStageRow:hover,
+.dpiStageRow:focus-within {
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel-subtle));
+  border-radius: 8px;
 }
 
 .stageBadge.ui-button {
@@ -1121,6 +1142,153 @@ h2 {
   display: flex;
   gap: 12px;
   margin-top: 20px;
+}
+
+.mouseTestPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.mouseTestHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.mouseTestHeader > div {
+  min-width: 0;
+}
+
+.mouseTestHeader strong {
+  color: var(--text);
+}
+
+.mouseTestReset.ui-button {
+  flex: 0 0 auto;
+}
+
+.mouseTestArea {
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--accent) 11%, transparent) 1px, transparent 1px),
+    var(--panel-subtle);
+  background-size: 20px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  cursor: crosshair;
+  height: 210px;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  width: 100%;
+}
+
+.mouseTestArea:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.mouseTestCrosshair {
+  height: 24px;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 120ms ease;
+  width: 24px;
+  z-index: 2;
+}
+
+.mouseTestCrosshair::before,
+.mouseTestCrosshair::after {
+  background: var(--accent);
+  content: "";
+  position: absolute;
+}
+
+.mouseTestCrosshair::before {
+  height: 100%;
+  left: 50%;
+  top: 0;
+  width: 1px;
+}
+
+.mouseTestCrosshair::after {
+  height: 1px;
+  left: 0;
+  top: 50%;
+  width: 100%;
+}
+
+.mouseTestTrail {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.mouseTestDot {
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+  height: 4px;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 4px;
+}
+
+.mouseTestChart {
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  height: 40px;
+  overflow: hidden;
+}
+
+.mouseTestChart canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.mouseTestStats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.mouseTestStat {
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-height: 72px;
+  padding: 9px 10px;
+}
+
+.mouseTestStat span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.mouseTestStat strong {
+  color: var(--accent-soft);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.mouseTestStat small {
+  color: var(--muted);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  margin-top: 2px;
 }
 
 .ui-switch {
@@ -1416,8 +1584,7 @@ h2 {
   }
 
   .connectionBox,
-  .deviceMeta,
-  .connectionFaq {
+  .deviceMeta {
     align-items: flex-start;
     text-align: left;
   }
@@ -1460,6 +1627,14 @@ h2 {
     display: grid;
   }
 
+  .buttonMappingActions {
+    justify-content: stretch;
+  }
+
+  .buttonMappingActions .ui-button {
+    flex: 1 1 140px;
+  }
+
   .dpiStageRow {
     align-items: start;
     grid-template-columns: 40px minmax(0, 1fr) 44px 48px;
@@ -1480,6 +1655,10 @@ h2 {
   }
 
   .rateGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mouseTestStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

@@ -40,14 +40,33 @@ function makeRequest(): ProtocolRequest {
 }
 
 function makeOffsetResponse(): DataView {
+  return makeOffsetRazerResponse({
+    commandClass: 0x07,
+    commandId: 0x80,
+    status: 0x02,
+    value: 0x80
+  });
+}
+
+function makeOffsetRazerResponse({
+  commandClass,
+  commandId,
+  status,
+  value
+}: {
+  commandClass: number;
+  commandId: number;
+  status: number;
+  value: number;
+}): DataView {
   const buffer = new ArrayBuffer(128);
   const response = new Uint8Array(buffer, 16, 90);
 
-  response[0] = 0x02;
+  response[0] = status;
   response[1] = 0x1f;
-  response[6] = 0x07;
-  response[7] = 0x80;
-  response[9] = 0x80;
+  response[6] = commandClass;
+  response[7] = commandId;
+  response[9] = value;
 
   return new DataView(buffer, 16, 90);
 }
@@ -183,6 +202,68 @@ describe("HidTransport", () => {
     expect(featureDevice.open).toHaveBeenCalledOnce();
   });
 
+  it("actively probes candidate control interfaces and skips mismatched responses", async () => {
+    const wrongFeatureDevice = makeDevice(
+      async () =>
+        makeOffsetRazerResponse({
+          commandClass: 0x04,
+          commandId: 0x85,
+          status: 0x02,
+          value: 0x80
+        }),
+      {
+        productName: "Razer Wrong Feature Interface",
+        collections: [{ usagePage: 0xff00, usage: 0x01, featureReports: [{ reportId: 0 }] }]
+      }
+    );
+    const controlDevice = makeDevice(async () => makeOffsetResponse(), {
+      productName: "Razer Battery Probe Interface",
+      collections: [{ usagePage: 0xff01, usage: 0x01, featureReports: [{ reportId: 0 }] }]
+    });
+
+    const transport = await connectTransportToDevices([wrongFeatureDevice, controlDevice]);
+
+    expect(transport.snapshot().device?.productName).toBe("Razer Battery Probe Interface");
+    expect(wrongFeatureDevice.open).toHaveBeenCalledOnce();
+    expect(wrongFeatureDevice.close).toHaveBeenCalledOnce();
+    expect(controlDevice.open).toHaveBeenCalledOnce();
+    expect(wrongFeatureDevice.receiveFeatureReport).toHaveBeenCalledWith(RAZER_REPORT_ID);
+    expect(controlDevice.receiveFeatureReport).toHaveBeenCalledWith(RAZER_REPORT_ID);
+  });
+
+  it("checks same-product authorized interfaces after the chooser returns an input path", async () => {
+    const inputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00de,
+      productName: "Razer Mouse Input",
+      collections: [{ usagePage: 0x01, usage: 0x02 }]
+    });
+    const featureDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00de,
+      productName: "Razer Control Interface"
+    });
+    const otherRazerDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00df,
+      productName: "Other Razer Interface"
+    });
+    const getDevices = vi.fn(async () =>
+      getDevices.mock.calls.length === 1 ? [] : [inputOnlyDevice, featureDevice, otherRazerDevice]
+    );
+
+    vi.stubGlobal("navigator", {
+      hid: {
+        getDevices,
+        requestDevice: vi.fn(async () => [inputOnlyDevice])
+      }
+    });
+
+    const transport = new HidTransport();
+    await transport.requestAndOpen();
+
+    expect(transport.snapshot().device?.productName).toBe("Razer Control Interface");
+    expect(featureDevice.open).toHaveBeenCalledOnce();
+    expect(otherRazerDevice.open).not.toHaveBeenCalled();
+  });
+
   it("prefers an already-authorized control interface", async () => {
     const inputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
       productName: "Razer Mouse Input",
@@ -207,6 +288,58 @@ describe("HidTransport", () => {
     expect(requestDevice).not.toHaveBeenCalled();
     expect(inputOnlyDevice.open).not.toHaveBeenCalled();
     expect(featureDevice.open).toHaveBeenCalledOnce();
+  });
+
+  it("forces a new chooser selection after a manual disconnect", async () => {
+    const alreadyAllowedDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00de,
+      productName: "Already Allowed Razer Control Interface"
+    });
+    const selectedDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00df,
+      productName: "Selected Razer Control Interface"
+    });
+    const requestDevice = vi.fn(async () => [selectedDevice]);
+
+    vi.stubGlobal("navigator", {
+      hid: {
+        getDevices: vi.fn(async () => [alreadyAllowedDevice]),
+        requestDevice
+      }
+    });
+
+    const transport = new HidTransport();
+    await transport.requestAndOpen({ forceSelection: true });
+
+    expect(transport.snapshot().device?.productName).toBe("Selected Razer Control Interface");
+    expect(requestDevice).toHaveBeenCalledOnce();
+    expect(alreadyAllowedDevice.open).not.toHaveBeenCalled();
+    expect(selectedDevice.open).toHaveBeenCalledOnce();
+  });
+
+  it("does not reuse an already-authorized input-only interface when requesting a control path", async () => {
+    const alreadyAllowedInputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
+      productName: "Already Allowed Razer Mouse Input",
+      collections: [{ usagePage: 0x01, usage: 0x02 }]
+    });
+    const selectedFeatureDevice = makeDevice(async () => makeOffsetResponse(), {
+      productName: "Selected Razer Control Interface"
+    });
+    const requestDevice = vi.fn(async () => [selectedFeatureDevice]);
+
+    vi.stubGlobal("navigator", {
+      hid: {
+        getDevices: vi.fn(async () => [alreadyAllowedInputOnlyDevice]),
+        requestDevice
+      }
+    });
+
+    const transport = new HidTransport();
+    await transport.requestAndOpen();
+
+    expect(transport.snapshot().device?.productName).toBe("Selected Razer Control Interface");
+    expect(requestDevice).toHaveBeenCalledOnce();
+    expect(alreadyAllowedInputOnlyDevice.open).not.toHaveBeenCalled();
   });
 
   it("opens already-authorized devices without requesting a new selection", async () => {

@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js --host 127.0.0.1",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
-    "docs:sync": "node ./scripts/sync-readme-faq.mjs",
     "test": "node ./node_modules/vitest/vitest.mjs run --passWithNoTests",
     "test:watch": "node ./node_modules/vitest/vitest.mjs"
   },
@@ -28,14 +27,14 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.6.0",
-    "typescript": "^5.8.0",
+    "typescript": "^6.0.0",
     "vite": "^8.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "jsdom": "^26.0.0",
+    "jsdom": "^29.0.0",
     "vitest": "^4.1.7"
   }
 }

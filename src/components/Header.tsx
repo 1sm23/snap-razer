@@ -10,7 +10,6 @@ import settingsIcon from "@iconify-icons/lucide/settings";
 import sunIcon from "@iconify-icons/lucide/sun";
 import sunMoonIcon from "@iconify-icons/lucide/sun-moon";
 import githubIcon from "@iconify-icons/simple-icons/github";
-import { getFaqItem } from "../content/faq";
 import type { ConnectedDevice } from "../domain/types";
 import { useI18n, type SupportedLanguage } from "../i18n";
 import type { ResolvedThemeMode, ThemeMode } from "../theme";
@@ -63,7 +62,6 @@ export function Header({
 }: HeaderProps) {
   const githubUrl = "https://github.com/1sm23/snap-razer";
   const { availableLanguages, language, setLanguage, t } = useI18n();
-  const duplicateDevicesFaq = getFaqItem("duplicateDevices", language);
   const nextTheme = resolvedThemeMode === "dark" ? "light" : "dark";
   const themeOptions: ThemeMode[] = ["light", "dark", "system"];
   const themeIcons = {
@@ -200,54 +198,53 @@ export function Header({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="connectionButtonGroup">
+        <div className={device ? "connectionButtonGroup connectionButtonGroupConnected" : "connectionButtonGroup"}>
           <Button className="connectionButtonMain" type="button" disabled={!hidSupported || connecting} onClick={onConnect}>
             {connecting ? t("connection.connecting") : t("connection.connect")}
           </Button>
           {device ? (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label={t("connection.actions")}
-                    className="connectionButtonMenu"
-                    disabled={connecting}
-                    size="icon"
-                    title={t("connection.actions")}
-                    type="button"
-                  >
-                    <Icon aria-hidden="true" height={16} icon={chevronDownIcon} width={16} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={onDisconnect}>{t("connection.disconnect")}</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label={t("connection.conflictHelp")}
-                    className="connectionButtonHelp"
-                    size="icon"
-                    title={t("connection.conflictHelp")}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Icon aria-hidden="true" height={16} icon={helpCircleIcon} width={16} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="connectionHelpMenu">
-                  <p className="connectionHelpLead">{t("connection.nativeDriverConflict")}</p>
-                  <ol className="connectionHelpList">
-                    <li>{t("connection.conflictStepQuit")}</li>
-                    <li>{t("connection.conflictStepWindowsService")}</li>
-                    <li>{t("connection.conflictStepReplug")}</li>
-                    <li>{t("connection.conflictStepPermission")}</li>
-                  </ol>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label={t("connection.actions")}
+                  className="connectionButtonMenu"
+                  disabled={connecting}
+                  size="icon"
+                  title={t("connection.actions")}
+                  type="button"
+                >
+                  <Icon aria-hidden="true" height={16} icon={chevronDownIcon} width={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={onDisconnect}>{t("connection.disconnect")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label={t("connection.conflictHelp")}
+                  className="connectionButtonHelp"
+                  size="icon"
+                  title={t("connection.conflictHelp")}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Icon aria-hidden="true" height={16} icon={helpCircleIcon} width={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="connectionHelpMenu">
+                <p className="connectionHelpLead">{t("connection.nativeDriverConflict")}</p>
+                <ol className="connectionHelpList">
+                  <li>{t("connection.conflictStepQuit")}</li>
+                  <li>{t("connection.conflictStepWindowsService")}</li>
+                  <li>{t("connection.conflictStepReplug")}</li>
+                  <li>{t("connection.conflictStepPermission")}</li>
+                </ol>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         <div className="deviceMeta">
           <span>{device?.productName ?? t("connection.noDevice")}</span>
@@ -263,23 +260,7 @@ export function Header({
           ) : null}
           {error ? <small className="errorText">{error}</small> : null}
         </div>
-        <details className="connectionFaq">
-          <summary>{duplicateDevicesFaq.question}</summary>
-          {duplicateDevicesFaq.answer.map((paragraph) => (
-            <p key={paragraph}>{renderInlineCode(paragraph)}</p>
-          ))}
-        </details>
       </div>
     </header>
   );
-}
-
-function renderInlineCode(text: string) {
-  return text.split(/(`[^`]+`)/g).map((part, index) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return <code key={`${part}-${index}`}>{part.slice(1, -1)}</code>;
-    }
-
-    return part;
-  });
 }

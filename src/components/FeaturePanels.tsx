@@ -1,5 +1,7 @@
+import rotateCcwIcon from "@iconify-icons/lucide/rotate-ccw";
+import { Icon } from "@iconify/react";
 import { flushSync } from "react-dom";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { BatteryResult, ChargingResult } from "../features/batteryAdapter";
 import {
   BUTTON_ACTION_OPTIONS,
@@ -38,6 +40,19 @@ const DPI_STAGE_SWATCHES = [
   "#00edff",
   "#fff700"
 ] as const;
+const MOUSE_TEST_WINDOW_MS = 1000;
+const MOUSE_TEST_HISTORY_MAX = 80;
+const MOUSE_TEST_MAX_DOTS = 50;
+
+interface MouseTestStats {
+  intervalUs: number | null;
+  jitter: number | null;
+  peak: number | null;
+  rate: number | null;
+  speed: number;
+  x: number;
+  y: number;
+}
 
 interface FeaturePanelsProps {
   battery: BatteryResult | null;
@@ -193,12 +208,20 @@ export function FeaturePanels({
             <ControlTile className="buttonMappingPanel" eyebrow={t("customize.buttons")}>
               <div className="buttonMappingHeader">
                 <div>
-                  <strong>{t("buttonMap.title")}</strong>
+                  <div className="buttonMappingTitleLine">
+                    <strong>{t("buttonMap.title")}</strong>
+                    <span className="buttonMappingMode">{t("buttonMap.localDraft")}</span>
+                  </div>
                   <p>{t("buttonMap.description")}</p>
                 </div>
-                <Button type="button" variant="outline" onClick={onResetButtonMappings}>
-                  {t("buttonMap.reset")}
-                </Button>
+                <div className="buttonMappingActions">
+                  <Button type="button" variant="outline" onClick={onResetButtonMappings}>
+                    {t("buttonMap.reset")}
+                  </Button>
+                  <Button disabled type="button">
+                    {t("buttonMap.applyUnavailable")}
+                  </Button>
+                </div>
               </div>
               <div className="buttonMappingNotice">{t("buttonMap.firmwareNotice")}</div>
               <div className="buttonMappingList">
@@ -302,6 +325,8 @@ export function FeaturePanels({
               <ControlTile disabled eyebrow={t("performance.mouseProperties")} title={t("performance.systemSetting")}>
                 {t("performance.mousePropertiesDescription")}
               </ControlTile>
+
+              <MouseTestPanel />
             </div>
           </TabsContent>
 
@@ -356,6 +381,300 @@ export function FeaturePanels({
         </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+function MouseTestPanel() {
+  const { t } = useI18n();
+  const areaRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const crosshairRef = useRef<HTMLDivElement>(null);
+  const trailRef = useRef<HTMLDivElement>(null);
+  const timestampsRef = useRef<number[]>([]);
+  const hzHistoryRef = useRef<number[]>([]);
+  const dotRefs = useRef<HTMLDivElement[]>([]);
+  const peakHzRef = useRef(0);
+  const lastPointRef = useRef({ t: 0, x: 0, y: 0 });
+  const speedSmoothRef = useRef(0);
+  const [stats, setStats] = useState<MouseTestStats>({
+    intervalUs: null,
+    jitter: null,
+    peak: null,
+    rate: null,
+    speed: 0,
+    x: 0,
+    y: 0
+  });
+
+  useEffect(() => {
+    const intervalId = window.setInterval(calculateStats, 100);
+
+    return () => {
+      window.clearInterval(intervalId);
+      clearTrail();
+    };
+  }, []);
+
+  function resetTest() {
+    timestampsRef.current = [];
+    hzHistoryRef.current = [];
+    peakHzRef.current = 0;
+    lastPointRef.current = { t: 0, x: 0, y: 0 };
+    speedSmoothRef.current = 0;
+    clearTrail();
+    clearSparkline();
+    setStats({
+      intervalUs: null,
+      jitter: null,
+      peak: null,
+      rate: null,
+      speed: 0,
+      x: 0,
+      y: 0
+    });
+  }
+
+  function calculateStats() {
+    const cutoff = performance.now() - MOUSE_TEST_WINDOW_MS;
+    timestampsRef.current = timestampsRef.current.filter((timestamp) => timestamp > cutoff);
+
+    if (timestampsRef.current.length < 3) {
+      return;
+    }
+
+    const intervals = [];
+    for (let index = 1; index < timestampsRef.current.length; index += 1) {
+      intervals.push(timestampsRef.current[index] - timestampsRef.current[index - 1]);
+    }
+
+    const medianInterval = median(intervals);
+    const intervalHz = medianInterval > 0 ? Math.round(1000 / medianInterval) : 0;
+    const countHz = timestampsRef.current.length;
+    const bestHz = Math.max(intervalHz, countHz);
+    peakHzRef.current = Math.max(peakHzRef.current, bestHz);
+
+    const mean = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
+    const variance = intervals.reduce((sum, value) => sum + (value - mean) ** 2, 0) / intervals.length;
+    const jitter = mean > 0 ? (Math.sqrt(variance) / mean) * 100 : 0;
+
+    hzHistoryRef.current = [...hzHistoryRef.current, bestHz].slice(-MOUSE_TEST_HISTORY_MAX);
+    drawSparkline();
+    setStats((currentStats) => ({
+      ...currentStats,
+      intervalUs: Math.round(medianInterval * 1000),
+      jitter,
+      peak: peakHzRef.current,
+      rate: bestHz
+    }));
+  }
+
+  function drawSparkline() {
+    const canvas = canvasRef.current;
+    const history = hzHistoryRef.current;
+
+    if (!canvas || history.length < 2) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    const width = Math.max(1, Math.floor(canvas.offsetWidth * window.devicePixelRatio));
+    const height = Math.max(1, Math.floor(canvas.offsetHeight * window.devicePixelRatio));
+    canvas.width = width;
+    canvas.height = height;
+
+    context.clearRect(0, 0, width, height);
+
+    const maxValue = Math.max(...history, 1000) * 1.1;
+    const step = width / (MOUSE_TEST_HISTORY_MAX - 1);
+    const startIndex = MOUSE_TEST_HISTORY_MAX - history.length;
+
+    const gradient = context.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, "rgba(69, 200, 59, 0.18)");
+    gradient.addColorStop(1, "rgba(69, 200, 59, 0)");
+
+    context.beginPath();
+    context.moveTo(startIndex * step, height);
+    history.forEach((value, index) => {
+      const x = (startIndex + index) * step;
+      const y = height - (value / maxValue) * (height - 4);
+      context.lineTo(x, y);
+    });
+    context.lineTo(width, height);
+    context.closePath();
+    context.fillStyle = gradient;
+    context.fill();
+
+    context.beginPath();
+    history.forEach((value, index) => {
+      const x = (startIndex + index) * step;
+      const y = height - (value / maxValue) * (height - 4);
+      if (index === 0) {
+        context.moveTo(x, y);
+      } else {
+        context.lineTo(x, y);
+      }
+    });
+    context.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#45c83b";
+    context.lineWidth = Math.max(2, window.devicePixelRatio * 1.2);
+    context.stroke();
+
+    const lastValue = history[history.length - 1];
+    const lastX = (startIndex + history.length - 1) * step;
+    const lastY = height - (lastValue / maxValue) * (height - 4);
+    context.beginPath();
+    context.arc(lastX, lastY, 3 * window.devicePixelRatio, 0, Math.PI * 2);
+    context.fillStyle = context.strokeStyle;
+    context.fill();
+  }
+
+  function clearSparkline() {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) {
+      return;
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const area = areaRef.current;
+    if (!area) {
+      return;
+    }
+
+    const nativeEvent = event.nativeEvent as PointerEvent & {
+      getCoalescedEvents?: () => PointerEvent[];
+    };
+    const reportedCoalescedEvents = nativeEvent.getCoalescedEvents?.();
+    const coalescedEvents = reportedCoalescedEvents && reportedCoalescedEvents.length > 0
+      ? reportedCoalescedEvents
+      : [nativeEvent];
+    const rect = area.getBoundingClientRect();
+    const timestamp = performance.now();
+    const lastEvent = coalescedEvents[coalescedEvents.length - 1] ?? nativeEvent;
+    const x = lastEvent.clientX - rect.left;
+    const y = lastEvent.clientY - rect.top;
+
+    for (const pointerEvent of coalescedEvents) {
+      timestampsRef.current.push(pointerEvent.timeStamp || timestamp);
+      addTrailDot(pointerEvent.clientX - rect.left, pointerEvent.clientY - rect.top);
+    }
+
+    if (crosshairRef.current) {
+      crosshairRef.current.style.left = `${x}px`;
+      crosshairRef.current.style.top = `${y}px`;
+      crosshairRef.current.style.opacity = "1";
+    }
+
+    const lastPoint = lastPointRef.current;
+    if (lastPoint.t > 0) {
+      const seconds = (timestamp - lastPoint.t) / 1000;
+      if (seconds > 0) {
+        const distance = Math.hypot(x - lastPoint.x, y - lastPoint.y);
+        speedSmoothRef.current = speedSmoothRef.current * 0.7 + (distance / seconds) * 0.3;
+      }
+    }
+
+    lastPointRef.current = { t: timestamp, x, y };
+    setStats((currentStats) => ({
+      ...currentStats,
+      speed: Math.round(speedSmoothRef.current),
+      x: Math.round(x),
+      y: Math.round(y)
+    }));
+  }
+
+  function handlePointerLeave() {
+    speedSmoothRef.current = 0;
+    if (crosshairRef.current) {
+      crosshairRef.current.style.opacity = "0";
+    }
+    setStats((currentStats) => ({ ...currentStats, speed: 0 }));
+  }
+
+  function addTrailDot(x: number, y: number) {
+    const trail = trailRef.current;
+    if (!trail) {
+      return;
+    }
+
+    const dot = document.createElement("div");
+    dot.className = "mouseTestDot";
+    dot.style.left = `${x}px`;
+    dot.style.top = `${y}px`;
+    trail.append(dot);
+    dotRefs.current.push(dot);
+
+    while (dotRefs.current.length > MOUSE_TEST_MAX_DOTS) {
+      dotRefs.current.shift()?.remove();
+    }
+
+    dotRefs.current.forEach((item, index) => {
+      item.style.opacity = String(0.2 + (0.8 * index) / Math.max(dotRefs.current.length, 1));
+    });
+  }
+
+  function clearTrail() {
+    dotRefs.current.forEach((dot) => dot.remove());
+    dotRefs.current = [];
+  }
+
+  return (
+    <ControlTile className="mouseTestPanel" eyebrow={t("mouseTest.title")}>
+      <div className="mouseTestHeader">
+        <div>
+          <strong>{stats.rate === null ? t("mouseTest.waiting") : t("mouseTest.rateValue", { rate: stats.rate })}</strong>
+        </div>
+        <Button
+          aria-label={t("mouseTest.reset")}
+          className="mouseTestReset"
+          size="icon"
+          title={t("mouseTest.reset")}
+          type="button"
+          variant="outline"
+          onClick={resetTest}
+        >
+          <Icon icon={rotateCcwIcon} />
+        </Button>
+      </div>
+      <div
+        aria-label={t("mouseTest.areaLabel")}
+        className="mouseTestArea"
+        ref={areaRef}
+        role="application"
+        tabIndex={0}
+        onPointerLeave={handlePointerLeave}
+        onPointerMove={handlePointerMove}
+      >
+        <div className="mouseTestCrosshair" ref={crosshairRef} />
+        <div className="mouseTestTrail" ref={trailRef} />
+      </div>
+      <div className="mouseTestChart">
+        <canvas aria-label={t("mouseTest.chartLabel")} ref={canvasRef} />
+      </div>
+      <div className="mouseTestStats">
+        <MouseTestStat label={t("mouseTest.peak")} unit="Hz" value={stats.peak ?? "--"} />
+        <MouseTestStat label={t("mouseTest.jitter")} unit="%" value={stats.jitter === null ? "--" : stats.jitter.toFixed(1)} />
+        <MouseTestStat label={t("mouseTest.interval")} unit="us" value={stats.intervalUs ?? "--"} />
+        <MouseTestStat label={t("mouseTest.speed")} unit="px/s" value={stats.speed} />
+        <MouseTestStat label={t("mouseTest.position")} value={`${stats.x}, ${stats.y}`} />
+      </div>
+    </ControlTile>
+  );
+}
+
+function MouseTestStat({ label, unit, value }: { label: string; unit?: string; value: ReactNode }) {
+  return (
+    <div className="mouseTestStat">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {unit ? <small>{unit}</small> : null}
+    </div>
   );
 }
 
@@ -638,14 +957,9 @@ function DpiStageRow({
           }}
           onChange={(event) => {
             const nextText = event.target.value;
-            const parsedValue = Number(nextText);
 
             setNumberTextValue(axis, nextText);
             numberDirtyRef.current[axis] = true;
-            if (nextText !== "" && Number.isInteger(parsedValue) && isDpiInRange(parsedValue)) {
-              draftValueRef.current = { ...draftValueRef.current, [axis]: parsedValue };
-              onChange(axis, parsedValue, splitAxes);
-            }
           }}
           onFocus={() => {
             numberFocusedRef.current[axis] = true;
@@ -780,14 +1094,23 @@ function clampDpi(value: number): number {
   return Math.min(Math.max(value, DPI_MIN), DPI_MAX);
 }
 
-function isDpiInRange(value: number): boolean {
-  return value >= DPI_MIN && value <= DPI_MAX;
-}
-
 function clampNumber(value: number, min: number, max: number): number {
   if (!Number.isInteger(value)) {
     return min;
   }
 
   return Math.min(Math.max(value, min), max);
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  const sortedValues = [...values].sort((left, right) => left - right);
+  const middleIndex = Math.floor(sortedValues.length / 2);
+
+  return sortedValues.length % 2 === 0
+    ? (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2
+    : sortedValues[middleIndex];
 }

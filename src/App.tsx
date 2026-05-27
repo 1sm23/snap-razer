@@ -50,6 +50,7 @@ const DEFAULT_DPI_STAGES: DpiStages = {
   ]
 };
 const DPI_APPLY_DEBOUNCE_MS = 120;
+const AUTO_CONNECT_BLOCKED_STORAGE_KEY = "snap-razer-auto-connect-blocked";
 const BUTTON_MAPPINGS_STORAGE_KEY = "snap-razer-button-mappings";
 type DpiApplyMode = "immediate" | "debounced";
 
@@ -139,14 +140,15 @@ export default function App() {
     };
   }, []);
 
-  const connect = useCallback(async (mode: "authorized" | "request") => {
+  const connect = useCallback(async (mode: "authorized" | "request", options: { forceSelection?: boolean } = {}): Promise<boolean> => {
     const hasCurrentDevice = currentDeviceRef.current !== null;
 
     setConnecting(true);
     setError(null);
 
     try {
-      const connected = mode === "authorized" ? await transport.openAuthorized() : await transport.requestAndOpen();
+      const connected =
+        mode === "authorized" ? await transport.openAuthorized() : await transport.requestAndOpen(options);
 
       if (!connected) {
         if (!hasCurrentDevice) {
@@ -157,7 +159,7 @@ export default function App() {
           setDebugEnabled(true);
           setDebugPanelOpen(true);
         }
-        return;
+        return false;
       }
 
       const initialCapabilities = createInitialCapabilities();
@@ -170,7 +172,7 @@ export default function App() {
         setError(detail);
         setDebugEnabled(true);
         setDebugPanelOpen(true);
-        return;
+        return true;
       }
 
       const probeResult = await runCapabilityProbe(initialCapabilities, transport.command);
@@ -191,18 +193,20 @@ export default function App() {
       setIdleTimeValue(probeResult.idleTime);
       setLowBatteryThresholdValue(probeResult.lowBatteryThreshold);
       setLogs(transport.snapshot().logs);
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
       setLogs(transport.snapshot().logs);
       setDebugEnabled(true);
       setDebugPanelOpen(true);
+      return false;
     } finally {
       setConnecting(false);
     }
   }, [transport]);
 
   useEffect(() => {
-    if (!hidSupported || autoConnectAttemptedRef.current) {
+    if (!hidSupported || autoConnectAttemptedRef.current || readAutoConnectBlocked()) {
       return;
     }
 
@@ -211,10 +215,14 @@ export default function App() {
   }, [connect, hidSupported]);
 
   async function handleConnect() {
-    await connect("request");
+    const connected = await connect("request", { forceSelection: readAutoConnectBlocked() });
+    if (connected) {
+      storeAutoConnectBlocked(false);
+    }
   }
 
   async function handleDisconnect() {
+    storeAutoConnectBlocked(true);
     setConnecting(false);
     setError(null);
 
@@ -426,6 +434,10 @@ export default function App() {
       storeButtonMappings(nextMappings);
       return nextMappings;
     });
+    toast({
+      description: t("buttonMap.savedDraftDescription"),
+      title: t("buttonMap.savedDraft")
+    });
   }
 
   function handleButtonMappingCustomKeysChange(buttonId: string, customKeys: string) {
@@ -440,6 +452,10 @@ export default function App() {
     const nextMappings = createDefaultButtonMappings();
     storeButtonMappings(nextMappings);
     setButtonMappings(nextMappings);
+    toast({
+      description: t("buttonMap.savedDraftDescription"),
+      title: t("buttonMap.resetDraft")
+    });
   }
 
   return (
@@ -553,6 +569,34 @@ function readStoredButtonMappings(): ButtonMapping[] {
     return sanitizeButtonMappings(storedValue ? JSON.parse(storedValue) : null);
   } catch {
     return createDefaultButtonMappings();
+  }
+}
+
+export function readAutoConnectBlocked(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(AUTO_CONNECT_BLOCKED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function storeAutoConnectBlocked(blocked: boolean): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (blocked) {
+      window.localStorage.setItem(AUTO_CONNECT_BLOCKED_STORAGE_KEY, "true");
+    } else {
+      window.localStorage.removeItem(AUTO_CONNECT_BLOCKED_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage failures; connection controls should still work in private or restricted contexts.
   }
 }
 

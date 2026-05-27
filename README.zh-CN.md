@@ -1,6 +1,8 @@
 ﻿# Snap Razer
 
-English version: [README.md](./README.md)
+<p align="center">
+  简体中文 | <a href="README.md">English</a>
+</p>
 
 先看官方的 Razer Web 驱动：
 
@@ -21,12 +23,11 @@ Snap Razer 是一个基于 WebHID 的 Razer 设备控制台，目标是先摸清
 
 - [ ] 在更多 Razer 鼠标和接收器上确认读写行为
 - [ ] 增加雷蛇键盘发现和基础能力探测支持
-- [ ] 优化浏览器暴露多个同名设备时的 HID 接口选择
 - [ ] 扩展 DPI 档位、轮询率、灯光、电源、按键等功能协议覆盖
 - [ ] 给未知设备发送功能命令前增加更安全的写入保护
 - [ ] 增加配置导入/导出，让已确认的设置可以本地保存
 - [ ] 基于真实测试反馈整理设备兼容性表
-- [ ] 改进 Synapse 占用、权限缓存、input-only 接口等问题的诊断提示
+- [ ] 改进权限缓存、旧 HID 状态、input-only 接口等问题的诊断提示
 
 ## 为什么会出现 `probe failed`
 
@@ -35,25 +36,13 @@ Snap Razer 是一个基于 WebHID 的 Razer 设备控制台，目标是先摸清
 更常见的是：
 
 - 浏览器选到了只有 input report 的接口，不能往里发控制命令
-- Razer Synapse 或其他软件已经占用了真正的控制接口
 - 固件更新、休眠唤醒或重新连接之后，接收器/浏览器还留着旧的 HID 状态
 - 设备确实暴露了 WebHID 可见的路径，但这个项目还没确认到对应功能协议
 
 所以这个状态更像是“这条能力链路暂时没打通”，不是“整只鼠标坏了”。
 
-如果所有主动探测同时失败，先拔插 Razer 接收器，再清掉浏览器里这个站点的 HID 设备权限，然后重新连接。拔插会强制 Windows 和浏览器重新枚举设备，能清掉固件更新后残留的 report 描述符或旧接口选择。
+如果所有主动探测同时失败，先拔插 Razer 接收器，再清掉浏览器里这个站点的 HID 设备权限，然后重新连接。拔插会强制系统和浏览器重新枚举设备，能清掉固件更新后残留的 report 描述符或旧接口选择。
 
-Windows 上，从托盘退出 Razer Synapse 或停止服务后，仍可能有驱动或后台服务重新抢占 HID 控制接口。如果 WebHID 还是碰不到控制接口，请卸载 Razer Synapse / Razer Central / Razer App Engine，重启 Windows，拔插接收器，然后清除此站点的 HID 权限并重新连接。用完此 WebHID 页面后，再按需要重新安装 Razer 原生软件。
-
-## Q&A
-
-### 为什么浏览器网站信息里会看到两个同名设备？
-
-这通常不是两只鼠标，而是一只物理鼠标暴露了多个 HID 接口。所以在 Chrome 的网站信息 / 站点权限里，HID 设备列表可能会具体显示为 2 个设备。
-
-比如 Razer Viper V3 Pro SE 可能同时通过多个 HID 路径出现，一个是普通鼠标输入接口，另一个是同一个 USB 设备下面的其他 collection。Chrome 会把每条匹配的 HID 路径单独列出来，但选择器里只显示产品名，所以看起来像重复了。
-
-WebHID 的过滤条件只能匹配 `vendorId`、`productId`、`usagePage`、`usage` 这类字段，不能按 Windows 的 `MI_00` 或 `MI_01&COL02` 这种接口编号过滤。因此两个看起来一样的条目可能已经是浏览器能区分到的最窄结果。这不是两只鼠标，也不是 React 重复渲染。
 ## 适合什么场景
 
 - 你想在浏览器里看看 Razer 设备到底暴露了什么
@@ -75,6 +64,13 @@ npm run dev
 ```
 
 然后用 Chromium 系浏览器打开本地地址。
+
+## 致谢
+
+- [Razer Synapse](https://synapse.razer.com/)
+- [OpenRazer](https://openrazer.github.io/)
+- [uk0/web_driver_mouse](https://github.com/uk0/web_driver_mouse)
+- [robatwilliams/awesome-webhid](https://github.com/robatwilliams/awesome-webhid)
 
 ## 现实一点说
 
