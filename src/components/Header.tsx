@@ -198,7 +198,7 @@ export function Header({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="connectionButtonGroup">
+        <div className={device ? "connectionButtonGroup connectionButtonGroupConnected" : "connectionButtonGroup"}>
           <Button className="connectionButtonMain" type="button" disabled={!hidSupported || connecting} onClick={onConnect}>
             {connecting ? t("connection.connecting") : t("connection.connect")}
           </Button>

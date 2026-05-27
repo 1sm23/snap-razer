@@ -16,6 +16,10 @@ export interface HidTransportSnapshot {
   logs: HidLogEntry[];
 }
 
+export interface RequestAndOpenOptions {
+  forceSelection?: boolean;
+}
+
 const RAZER_CONTROL_REQUEST_FILTERS: HIDDeviceFilter[] = [
   { vendorId: RAZER_VENDOR_ID, usagePage: 0xff00, usage: 0x01 },
   { vendorId: RAZER_VENDOR_ID, usagePage: 0xff01, usage: 0x01 },
@@ -97,12 +101,12 @@ export class HidTransport {
     return this.snapshot().device;
   }
 
-  async requestAndOpen(): Promise<ConnectedDevice | null> {
+  async requestAndOpen(options: RequestAndOpenOptions = {}): Promise<ConnectedDevice | null> {
     if (!navigator.hid) {
       throw new Error("WebHID is not available in this browser.");
     }
 
-    const alreadyAllowed = await navigator.hid.getDevices();
+    const alreadyAllowed = options.forceSelection ? [] : await navigator.hid.getDevices();
     const alreadyAllowedRazerDevices = alreadyAllowed.filter((device) => device.vendorId === RAZER_VENDOR_ID);
     const existingControlDevice = await chooseControlDeviceWithProbe(alreadyAllowedRazerDevices);
 

@@ -1,6 +1,8 @@
 # Snap Razer
 
-Chinese version: [README.zh-CN.md](./README.zh-CN.md)
+<p align="center">
+  <a href="README.zh-CN.md">简体中文</a> | English
+</p>
 
 Start with the official Razer web driver:
 

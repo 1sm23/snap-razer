@@ -276,11 +276,11 @@ h2 {
 }
 
 .connectionButtonMain.ui-button {
-  border-radius: 6px 0 0 6px;
+  border-radius: 6px;
 }
 
-.connectionButtonMain.ui-button:only-child {
-  border-radius: 6px;
+.connectionButtonGroupConnected .connectionButtonMain.ui-button {
+  border-radius: 6px 0 0 6px;
 }
 
 .connectionButtonMenu.ui-button {

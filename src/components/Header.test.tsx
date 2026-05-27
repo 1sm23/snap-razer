@@ -35,6 +35,7 @@ describe("Header", () => {
 
     expect(html).toContain("Connection help");
     expect(html).not.toContain("Connection actions");
+    expect(html).not.toContain("connectionButtonGroupConnected");
   });
 
   it("hides connection help once a device is connected", () => {
@@ -42,5 +43,6 @@ describe("Header", () => {
 
     expect(html).toContain("Connection actions");
     expect(html).not.toContain("Connection help");
+    expect(html).toContain("connectionButtonGroupConnected");
   });
 });

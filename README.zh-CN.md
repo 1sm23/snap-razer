@@ -1,6 +1,8 @@
 ﻿# Snap Razer
 
-English version: [README.md](./README.md)
+<p align="center">
+  简体中文 | <a href="README.md">English</a>
+</p>
 
 先看官方的 Razer Web 驱动：
 

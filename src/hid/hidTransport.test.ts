@@ -290,6 +290,33 @@ describe("HidTransport", () => {
     expect(featureDevice.open).toHaveBeenCalledOnce();
   });
 
+  it("forces a new chooser selection after a manual disconnect", async () => {
+    const alreadyAllowedDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00de,
+      productName: "Already Allowed Razer Control Interface"
+    });
+    const selectedDevice = makeDevice(async () => makeOffsetResponse(), {
+      productId: 0x00df,
+      productName: "Selected Razer Control Interface"
+    });
+    const requestDevice = vi.fn(async () => [selectedDevice]);
+
+    vi.stubGlobal("navigator", {
+      hid: {
+        getDevices: vi.fn(async () => [alreadyAllowedDevice]),
+        requestDevice
+      }
+    });
+
+    const transport = new HidTransport();
+    await transport.requestAndOpen({ forceSelection: true });
+
+    expect(transport.snapshot().device?.productName).toBe("Selected Razer Control Interface");
+    expect(requestDevice).toHaveBeenCalledOnce();
+    expect(alreadyAllowedDevice.open).not.toHaveBeenCalled();
+    expect(selectedDevice.open).toHaveBeenCalledOnce();
+  });
+
   it("does not reuse an already-authorized input-only interface when requesting a control path", async () => {
     const alreadyAllowedInputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
       productName: "Already Allowed Razer Mouse Input",
