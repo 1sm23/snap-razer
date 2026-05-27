@@ -1,5 +1,13 @@
 import type { ConnectedDevice, HidLogEntry, ProtocolRequest, ProtocolResponse } from "../domain/types";
-import { bytesToHex, parseRazerResponse, RAZER_VENDOR_ID } from "../domain/razerProtocol";
+import {
+  BATTERY_COMMAND_ID,
+  RAZER_COMMAND_CLASS_DEVICE,
+  RAZER_REPORT_ID,
+  RAZER_VENDOR_ID,
+  buildRazerReport,
+  bytesToHex,
+  parseRazerResponse
+} from "../domain/razerProtocol";
 
 export type TransportCommand = (request: ProtocolRequest) => Promise<ProtocolResponse>;
 
@@ -15,9 +23,8 @@ const RAZER_CONTROL_REQUEST_FILTERS: HIDDeviceFilter[] = [
   { vendorId: RAZER_VENDOR_ID, usagePage: 0xff03, usage: 0x01 }
 ];
 
-// Viper V3 Pro/SE exposes the report-zero feature path through generic mouse
-// usages in Chrome. WebHID filters cannot target Windows MI/COL interfaces, so
-// affected devices may show more than one same-named entry in the chooser.
+// Viper V3 Pro/SE can expose the report-zero feature path through generic mouse
+// usages in Chrome, so these filters keep those control candidates reachable.
 const KNOWN_REPORT_ZERO_FEATURE_FILTERS: HIDDeviceFilter[] = [
   { vendorId: RAZER_VENDOR_ID, productId: 0x00de, usagePage: 0x01, usage: 0x02 },
   { vendorId: RAZER_VENDOR_ID, productId: 0x00df, usagePage: 0x01, usage: 0x02 }
@@ -27,6 +34,12 @@ const RAZER_REQUEST_FILTERS: HIDDeviceFilter[] = [
   ...RAZER_CONTROL_REQUEST_FILTERS,
   ...KNOWN_REPORT_ZERO_FEATURE_FILTERS
 ];
+
+const CONTROL_PROBE_REPORT = buildRazerReport({
+  commandClass: RAZER_COMMAND_CLASS_DEVICE,
+  commandId: BATTERY_COMMAND_ID,
+  dataSize: 0x02
+});
 
 export class HidTransport {
   private device: HIDDevice | null = null;
@@ -74,7 +87,7 @@ export class HidTransport {
 
     const alreadyAllowed = await navigator.hid.getDevices();
     const alreadyAllowedRazerDevices = alreadyAllowed.filter((device) => device.vendorId === RAZER_VENDOR_ID);
-    const device = chooseBestDevice(alreadyAllowedRazerDevices);
+    const device = await chooseBestDeviceWithProbe(alreadyAllowedRazerDevices);
 
     if (!device) {
       return null;
@@ -91,15 +104,24 @@ export class HidTransport {
 
     const alreadyAllowed = await navigator.hid.getDevices();
     const alreadyAllowedRazerDevices = alreadyAllowed.filter((device) => device.vendorId === RAZER_VENDOR_ID);
-    const existingControlDevice = chooseControlDevice(alreadyAllowedRazerDevices);
+    const existingControlDevice = await chooseControlDeviceWithProbe(alreadyAllowedRazerDevices);
 
-    const device =
-      existingControlDevice ??
-      chooseBestDevice(
-        await navigator.hid.requestDevice({
-          filters: RAZER_REQUEST_FILTERS
-        })
-      );
+    const selectedDevices =
+      existingControlDevice === null
+        ? await navigator.hid.requestDevice({
+            filters: RAZER_REQUEST_FILTERS
+          })
+        : [];
+    const selectedRazerDevices = selectedDevices.filter((device) => device.vendorId === RAZER_VENDOR_ID);
+    const selectedProductIds = new Set(selectedRazerDevices.map((device) => device.productId));
+    const allowedAfterRequest =
+      selectedRazerDevices.length > 0
+        ? (await navigator.hid.getDevices()).filter(
+            (device) => device.vendorId === RAZER_VENDOR_ID && selectedProductIds.has(device.productId)
+          )
+        : [];
+    const requestedDevice = await chooseBestDeviceWithProbe(uniqueDevices([...selectedRazerDevices, ...allowedAfterRequest]));
+    const device = existingControlDevice ?? requestedDevice;
 
     if (!device) {
       throw new Error("No Razer HID device was selected.");
@@ -206,8 +228,8 @@ function isKnownReportZeroFeatureDevice(device: HIDDevice): boolean {
 
 function chooseBestDevice(devices: HIDDevice[]): HIDDevice | null {
   return (
-    chooseControlDevice(devices) ??
-    devices.find((candidate) => hasVendorDefinedCollection(candidate)) ??
+    chooseControlDevice(sortDevicesByControlScore(devices)) ??
+    sortDevicesByControlScore(devices).find((candidate) => hasVendorDefinedCollection(candidate)) ??
     devices[0] ??
     null
   );
@@ -222,6 +244,102 @@ function chooseControlDevice(devices: HIDDevice[]): HIDDevice | null {
     devices.find((candidate) => hasAnyWritableReport(candidate)) ??
     null
   );
+}
+
+async function chooseBestDeviceWithProbe(devices: HIDDevice[]): Promise<HIDDevice | null> {
+  if (devices.length <= 1) {
+    return chooseBestDevice(devices);
+  }
+
+  const sortedDevices = sortDevicesByControlScore(devices);
+  for (const candidate of sortedDevices) {
+    if (await canUseControlProbe(candidate)) {
+      return candidate;
+    }
+  }
+
+  return chooseBestDevice(sortedDevices);
+}
+
+async function chooseControlDeviceWithProbe(devices: HIDDevice[]): Promise<HIDDevice | null> {
+  const sortedDevices = sortDevicesByControlScore(devices);
+  for (const candidate of sortedDevices) {
+    if (await canUseControlProbe(candidate)) {
+      return candidate;
+    }
+  }
+
+  return chooseControlDevice(sortedDevices);
+}
+
+function sortDevicesByControlScore(devices: HIDDevice[]): HIDDevice[] {
+  return [...devices].sort((left, right) => getControlScore(right) - getControlScore(left));
+}
+
+function getControlScore(device: HIDDevice): number {
+  let score = 0;
+
+  if (hasFeatureReportZero(device)) {
+    score += 80;
+  }
+
+  if (hasAnyFeatureReport(device)) {
+    score += 40;
+  }
+
+  if (hasAnyOutputReport(device)) {
+    score += 35;
+  }
+
+  if (hasVendorDefinedCollection(device)) {
+    score += 30;
+  }
+
+  if (hasFeatureReportZero(device) && hasVendorDefinedCollection(device)) {
+    score += 40;
+  }
+
+  if (isKnownReportZeroFeatureDevice(device)) {
+    score += 20;
+  }
+
+  return score;
+}
+
+async function canUseControlProbe(device: HIDDevice): Promise<boolean> {
+  if (!canTryReportZeroFeatureProbe(device)) {
+    return false;
+  }
+
+  const openedByProbe = !device.opened;
+  let usable = false;
+
+  try {
+    if (!device.opened) {
+      await device.open();
+    }
+
+    await sendFeatureReportWithFallback(device, RAZER_REPORT_ID, CONTROL_PROBE_REPORT);
+    await sleep(35);
+    const dataView = await device.receiveFeatureReport(RAZER_REPORT_ID);
+    const response = parseRazerResponse(new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength));
+    usable =
+      response.success &&
+      response.commandClass === RAZER_COMMAND_CLASS_DEVICE &&
+      response.commandId === BATTERY_COMMAND_ID;
+  } catch {
+    usable = false;
+  }
+
+  if (!usable && openedByProbe && device.opened) {
+    await device.close();
+  }
+
+  return usable;
+}
+
+function uniqueDevices(devices: HIDDevice[]): HIDDevice[] {
+  return devices.filter((device, index) => devices.indexOf(device) === index);
 }
 
 function hasVendorDefinedCollection(device: HIDDevice): boolean {

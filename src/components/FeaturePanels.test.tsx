@@ -32,6 +32,8 @@ describe("FeaturePanels", () => {
     expect(html).toContain("Sensitivity");
     expect(html).toContain("Polling Rate");
     expect(html).toContain("Mouse Properties");
+    expect(html).toContain("Mouse Test");
+    expect(html).toContain("Move pending");
     expect(html).toContain("1000");
   });
 
@@ -179,7 +181,7 @@ describe("FeaturePanels", () => {
     });
   });
 
-  it("applies DPI stages immediately when active stage changes and live-applies sensitivity edits", () => {
+  it("applies DPI stages immediately when active stage changes and commits number edits on blur", () => {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -219,9 +221,22 @@ describe("FeaturePanels", () => {
 
     const numberInputs = container.querySelectorAll<HTMLInputElement>(".stageNumber");
     act(() => {
+      numberInputs[1].focus();
+    });
+
+    expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith(expect.objectContaining({ activeStage: 2 }));
+    expect(onApplyDpiStages).toHaveBeenCalledTimes(2);
+
+    act(() => {
       const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setInputValue?.call(numberInputs[1], "2400");
       numberInputs[1].dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onApplyDpiStages).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      numberInputs[1].blur();
     });
 
     expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith(
@@ -233,7 +248,6 @@ describe("FeaturePanels", () => {
         ]
       })
     );
-    expect(onApplyDpiStages).toHaveBeenCalledTimes(2);
     expect(onApplyDpiStages).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activeStage: 2,
@@ -241,23 +255,7 @@ describe("FeaturePanels", () => {
           { id: 1, x: 800, y: 800 },
           { id: 2, x: 2400, y: 2400 }
         ]
-      }),
-      "debounced"
-    );
-
-    act(() => {
-      numberInputs[1].focus();
-    });
-
-    expect(onApplyDpiStages).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        activeStage: 2,
-        stages: [
-          { id: 1, x: 800, y: 800 },
-          { id: 2, x: 2400, y: 2400 }
-        ]
-      }),
-      "debounced"
+      })
     );
 
     act(() => {
@@ -266,7 +264,7 @@ describe("FeaturePanels", () => {
     });
   });
 
-  it("activates and live-applies a DPI stage when editing it before committing", () => {
+  it("activates a DPI stage and commits number edits on Enter", () => {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -302,9 +300,22 @@ describe("FeaturePanels", () => {
 
     const numberInputs = container.querySelectorAll<HTMLInputElement>(".stageNumber");
     act(() => {
+      numberInputs[2].focus();
+    });
+
+    expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith(expect.objectContaining({ activeStage: 3 }));
+    expect(onApplyDpiStages).toHaveBeenLastCalledWith(expect.objectContaining({ activeStage: 3 }));
+
+    act(() => {
       const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setInputValue?.call(numberInputs[2], "3600");
       numberInputs[2].dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onApplyDpiStages).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      numberInputs[2].dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
     });
 
     expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith(
@@ -325,15 +336,8 @@ describe("FeaturePanels", () => {
           { id: 2, x: 1600, y: 1600 },
           { id: 3, x: 3600, y: 3600 }
         ]
-      },
-      "debounced"
+      }
     );
-
-    act(() => {
-      numberInputs[2].focus();
-    });
-
-    expect(onApplyDpiStages).toHaveBeenCalledTimes(1);
 
     const sliders = container.querySelectorAll<HTMLInputElement>(".stageSlider");
     act(() => {
@@ -741,22 +745,17 @@ describe("FeaturePanels", () => {
       numberInput?.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith({
-      ...dpiStagesDraft,
-      stages: [{ id: 1, x: 1200, y: 1200 }]
-    });
-    expect(onApplyDpiStages).toHaveBeenLastCalledWith(
-      {
-        ...dpiStagesDraft,
-        stages: [{ id: 1, x: 1200, y: 1200 }]
-      },
-      "debounced"
-    );
+    expect(onDpiStagesDraftChange).not.toHaveBeenCalled();
+    expect(onApplyDpiStages).not.toHaveBeenCalled();
 
     act(() => {
       numberInput?.blur();
     });
 
+    expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith({
+      ...dpiStagesDraft,
+      stages: [{ id: 1, x: 1200, y: 1200 }]
+    });
     expect(onApplyDpiStages).toHaveBeenLastCalledWith({
       ...dpiStagesDraft,
       stages: [{ id: 1, x: 1200, y: 1200 }]
@@ -820,11 +819,7 @@ describe("FeaturePanels", () => {
 
     expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith({
       ...dpiStagesDraft,
-      activeStage: 2,
-      stages: [
-        { id: 1, x: 800, y: 800 },
-        { id: 2, x: 2400, y: 2400 }
-      ]
+      activeStage: 2
     });
 
     act(() => {
@@ -958,22 +953,30 @@ describe("FeaturePanels", () => {
     expect(numberInputs).toHaveLength(2);
 
     act(() => {
+      numberInputs[1].focus();
+    });
+
+    act(() => {
       const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setInputValue?.call(numberInputs[1], "1200");
       numberInputs[1].dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(onDpiStagesDraftChange).not.toHaveBeenCalled();
+    expect(onApplyDpiStages).not.toHaveBeenCalled();
+
+    act(() => {
+      numberInputs[1].blur();
     });
 
     expect(onDpiStagesDraftChange).toHaveBeenLastCalledWith({
       ...dpiStagesDraft,
       stages: [{ id: 1, x: 800, y: 1200 }]
     });
-    expect(onApplyDpiStages).toHaveBeenLastCalledWith(
-      {
-        ...dpiStagesDraft,
-        stages: [{ id: 1, x: 800, y: 1200 }]
-      },
-      "debounced"
-    );
+    expect(onApplyDpiStages).toHaveBeenLastCalledWith({
+      ...dpiStagesDraft,
+      stages: [{ id: 1, x: 800, y: 1200 }]
+    });
 
     act(() => {
       root.render(

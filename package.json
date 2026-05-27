@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js --host 127.0.0.1",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
-    "docs:sync": "node ./scripts/sync-readme-faq.mjs",
     "test": "node ./node_modules/vitest/vitest.mjs run --passWithNoTests",
     "test:watch": "node ./node_modules/vitest/vitest.mjs"
   },

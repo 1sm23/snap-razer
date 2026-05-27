@@ -426,6 +426,10 @@ export default function App() {
       storeButtonMappings(nextMappings);
       return nextMappings;
     });
+    toast({
+      description: t("buttonMap.savedDraftDescription"),
+      title: t("buttonMap.savedDraft")
+    });
   }
 
   function handleButtonMappingCustomKeysChange(buttonId: string, customKeys: string) {
@@ -440,6 +444,10 @@ export default function App() {
     const nextMappings = createDefaultButtonMappings();
     storeButtonMappings(nextMappings);
     setButtonMappings(nextMappings);
+    toast({
+      description: t("buttonMap.savedDraftDescription"),
+      title: t("buttonMap.resetDraft")
+    });
   }
 
   return (
