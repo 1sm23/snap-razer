@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { Analytics } from '@vercel/analytics/next';
 import "./App.css";
 import { CapabilityMatrix } from "./components/CapabilityMatrix";
 import { DebugLog } from "./components/DebugLog";
@@ -506,6 +507,7 @@ export default function App() {
       {debugEnabled ? (
         <DebugLog logs={logs} open={debugPanelOpen} onOpenChange={setDebugPanelOpen} />
       ) : null}
+      <Analytics />
     </main>
   );
 }
