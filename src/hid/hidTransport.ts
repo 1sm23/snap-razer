@@ -20,24 +20,7 @@ export interface RequestAndOpenOptions {
   forceSelection?: boolean;
 }
 
-const RAZER_CONTROL_REQUEST_FILTERS: HIDDeviceFilter[] = [
-  { vendorId: RAZER_VENDOR_ID, usagePage: 0xff00, usage: 0x01 },
-  { vendorId: RAZER_VENDOR_ID, usagePage: 0xff01, usage: 0x01 },
-  { vendorId: RAZER_VENDOR_ID, usagePage: 0xff02, usage: 0x01 },
-  { vendorId: RAZER_VENDOR_ID, usagePage: 0xff03, usage: 0x01 }
-];
-
-// Viper V3 Pro/SE can expose the report-zero feature path through generic mouse
-// usages in Chrome, so these filters keep those control candidates reachable.
-const KNOWN_REPORT_ZERO_FEATURE_FILTERS: HIDDeviceFilter[] = [
-  { vendorId: RAZER_VENDOR_ID, productId: 0x00de, usagePage: 0x01, usage: 0x02 },
-  { vendorId: RAZER_VENDOR_ID, productId: 0x00df, usagePage: 0x01, usage: 0x02 }
-];
-
-const RAZER_REQUEST_FILTERS: HIDDeviceFilter[] = [
-  ...RAZER_CONTROL_REQUEST_FILTERS,
-  ...KNOWN_REPORT_ZERO_FEATURE_FILTERS
-];
+const RAZER_REQUEST_FILTERS: HIDDeviceFilter[] = [{ vendorId: RAZER_VENDOR_ID }];
 
 const CONTROL_PROBE_REPORT = buildRazerReport({
   commandClass: RAZER_COMMAND_CLASS_DEVICE,
@@ -227,7 +210,10 @@ function canTryReportZeroFeatureProbe(device: HIDDevice): boolean {
 }
 
 function isKnownReportZeroFeatureDevice(device: HIDDevice): boolean {
-  return device.vendorId === RAZER_VENDOR_ID && (device.productId === 0x00de || device.productId === 0x00df);
+  return (
+    device.vendorId === RAZER_VENDOR_ID &&
+    (device.productId === 0x00b3 || device.productId === 0x00de || device.productId === 0x00df)
+  );
 }
 
 function chooseBestDevice(devices: HIDDevice[]): HIDDevice | null {

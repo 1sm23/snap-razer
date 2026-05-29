@@ -110,7 +110,7 @@ afterEach(() => {
 });
 
 describe("HidTransport", () => {
-  it("requests control interfaces and known report-zero Viper interfaces", async () => {
+  it("requests all Razer HID interfaces so receiver-specific usages stay visible", async () => {
     const requestDevice = vi.fn(async () => []);
     vi.stubGlobal("navigator", {
       hid: {
@@ -124,14 +124,7 @@ describe("HidTransport", () => {
     await expect(transport.requestAndOpen()).rejects.toThrow("No Razer HID device was selected");
     expect(requestDevice).toHaveBeenCalledOnce();
     expect(requestDevice).toHaveBeenCalledWith({
-      filters: [
-        { vendorId: 0x1532, usagePage: 0xff00, usage: 0x01 },
-        { vendorId: 0x1532, usagePage: 0xff01, usage: 0x01 },
-        { vendorId: 0x1532, usagePage: 0xff02, usage: 0x01 },
-        { vendorId: 0x1532, usagePage: 0xff03, usage: 0x01 },
-        { vendorId: 0x1532, productId: 0x00de, usagePage: 0x01, usage: 0x02 },
-        { vendorId: 0x1532, productId: 0x00df, usagePage: 0x01, usage: 0x02 }
-      ]
+      filters: [{ vendorId: 0x1532 }]
     });
   });
 
@@ -405,12 +398,15 @@ describe("HidTransport", () => {
     expect(inputOnlyDevice.sendFeatureReport).not.toHaveBeenCalled();
   });
 
-  it("allows report-zero feature probes for known Viper V3 Pro SE interfaces", async () => {
+  it.each([
+    [0x00b3, "Razer HyperPolling Wireless Dongle"],
+    [0x00df, "Razer Viper V3 Pro SE"]
+  ])("allows report-zero feature probes for known generic mouse interfaces %#", async (productId, productName) => {
     vi.useFakeTimers();
     vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
     const device = makeDevice(async () => makeOffsetResponse(), {
-      productId: 0x00df,
-      productName: "Razer Viper V3 Pro SE",
+      productId,
+      productName,
       collections: [{ usagePage: 0x01, usage: 0x02 }]
     });
     const transport = await connectTransport(device);

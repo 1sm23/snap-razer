@@ -54,6 +54,7 @@ const DEFAULT_DPI_STAGES: DpiStages = {
 const DPI_APPLY_DEBOUNCE_MS = 120;
 const AUTO_CONNECT_BLOCKED_STORAGE_KEY = "snap-razer-auto-connect-blocked";
 const BUTTON_MAPPINGS_STORAGE_KEY = "snap-razer-button-mappings";
+const DPI_STAGES_LAYOUT_STORAGE_KEY = "snap-razer-dpi-stages-layout";
 type DpiApplyMode = "immediate" | "debounced";
 
 export default function App() {
@@ -309,6 +310,7 @@ export default function App() {
         try {
           const nextStages = await writeDpiStages(transport.command, nextDpiStages);
           const activeStage = findDpiStageById(nextStages, nextStages.activeStage);
+          storeDpiStagesLayout(nextStages);
           setDpiStages(nextStages);
           setDpiStagesDraft((currentStages) =>
             areDpiStagesEqual(currentStages, nextDpiStages) ? nextStages : currentStages
@@ -535,15 +537,56 @@ function findDpiStageById(dpiStages: DpiStages, stageId: number) {
   return dpiStages.stages.find((stage) => stage.id === stageId && isDpiStageEnabled(stage)) ?? null;
 }
 
-function mergeDpiStagesWithDefaults(dpiStages: DpiStages): DpiStages {
+export function mergeDpiStagesWithDefaults(dpiStages: DpiStages, storedLayout = readStoredDpiStagesLayout()): DpiStages {
+  const restoredStages = restoreDpiStagesFromStoredLayout(dpiStages, storedLayout);
+
+  if (restoredStages) {
+    return restoredStages;
+  }
+
   const probedStagesById = new Map(dpiStages.stages.map((stage) => [stage.id, stage]));
-  const stages = DEFAULT_DPI_STAGES.stages.map((defaultStage) => probedStagesById.get(defaultStage.id) ?? {
-    ...defaultStage,
-    enabled: false
-  });
-      const activeStage = stages.some((stage) => stage.id === dpiStages.activeStage && isDpiStageEnabled(stage))
+  const stages = DEFAULT_DPI_STAGES.stages.map((defaultStage) =>
+    probedStagesById.get(defaultStage.id) ?? {
+      ...defaultStage,
+      enabled: false
+    }
+  );
+  const activeStage = stages.some((stage) => stage.id === dpiStages.activeStage && isDpiStageEnabled(stage))
     ? dpiStages.activeStage
     : stages.find(isDpiStageEnabled)?.id ?? DEFAULT_DPI_STAGES.activeStage;
+
+  return { activeStage, stages };
+}
+
+function restoreDpiStagesFromStoredLayout(dpiStages: DpiStages, storedLayout: DpiStages | null): DpiStages | null {
+  if (!storedLayout) {
+    return null;
+  }
+
+  const storedEnabledStages = storedLayout.stages.filter(isDpiStageEnabled);
+
+  if (storedEnabledStages.length !== dpiStages.stages.length) {
+    return null;
+  }
+
+  let probedStageIndex = 0;
+  const stages = storedLayout.stages.map((storedStage) => {
+    if (!isDpiStageEnabled(storedStage)) {
+      return storedStage;
+    }
+
+    const probedStage = dpiStages.stages[probedStageIndex];
+    probedStageIndex += 1;
+
+    return {
+      ...storedStage,
+      enabled: true,
+      x: probedStage.x,
+      y: probedStage.y
+    };
+  });
+  const activeStage =
+    storedEnabledStages[dpiStages.activeStage - 1]?.id ?? stages.find(isDpiStageEnabled)?.id ?? DEFAULT_DPI_STAGES.activeStage;
 
   return { activeStage, stages };
 }
@@ -574,6 +617,33 @@ function readStoredButtonMappings(): ButtonMapping[] {
   } catch {
     return createDefaultButtonMappings();
   }
+}
+
+export function readStoredDpiStagesLayout(): DpiStages | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(DPI_STAGES_LAYOUT_STORAGE_KEY);
+    return storedValue ? sanitizeDpiStagesLayout(JSON.parse(storedValue)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeDpiStagesLayout(dpiStages: DpiStages): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const sanitizedLayout = sanitizeDpiStagesLayout(dpiStages);
+
+  if (!sanitizedLayout) {
+    return;
+  }
+
+  window.localStorage.setItem(DPI_STAGES_LAYOUT_STORAGE_KEY, JSON.stringify(sanitizedLayout));
 }
 
 export function readAutoConnectBlocked(): boolean {
@@ -610,4 +680,62 @@ function storeButtonMappings(buttonMappings: readonly ButtonMapping[]): void {
   }
 
   window.localStorage.setItem(BUTTON_MAPPINGS_STORAGE_KEY, JSON.stringify(buttonMappings));
+}
+
+function sanitizeDpiStagesLayout(value: unknown): DpiStages | null {
+  if (!isRecord(value) || !Array.isArray(value.stages)) {
+    return null;
+  }
+
+  const stagesById = new Map<number, unknown>();
+
+  for (const stage of value.stages) {
+    if (isRecord(stage) && isPositiveInteger(stage.id)) {
+      stagesById.set(stage.id, stage);
+    }
+  }
+
+  const stages: DpiStages["stages"] = [];
+
+  for (const defaultStage of DEFAULT_DPI_STAGES.stages) {
+    const storedStage = stagesById.get(defaultStage.id);
+
+    if (!isRecord(storedStage)) {
+      return null;
+    }
+
+    const enabled = storedStage.enabled === undefined ? true : storedStage.enabled;
+
+    if (typeof enabled !== "boolean" || !isDpiValue(storedStage.x) || !isDpiValue(storedStage.y)) {
+      return null;
+    }
+
+    stages.push({
+      enabled,
+      id: defaultStage.id,
+      x: storedStage.x,
+      y: storedStage.y
+    });
+  }
+
+  const activeStage = isPositiveInteger(value.activeStage)
+    ? value.activeStage
+    : DEFAULT_DPI_STAGES.activeStage;
+  const resolvedActiveStage = stages.some((stage) => stage.id === activeStage && isDpiStageEnabled(stage))
+    ? activeStage
+    : stages.find(isDpiStageEnabled)?.id;
+
+  return resolvedActiveStage ? { activeStage: resolvedActiveStage, stages } : null;
+}
+
+function isDpiValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 45000;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
