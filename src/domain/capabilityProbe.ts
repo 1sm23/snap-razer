@@ -2,6 +2,7 @@ import { readBattery, readCharging, type BatteryResult, type ChargingResult } fr
 import { readDpi, readDpiStages, type DpiStages, type DpiValue } from "../features/dpiAdapter";
 import { readPollingRateProfile, type PollingRate } from "../features/pollingRateAdapter";
 import { readIdleTime, readLowBatteryThreshold, type IdleTimeResult, type LowBatteryThresholdResult } from "../features/powerAdapter";
+import { readAdvancedSettings, type AdvancedSettings } from "../features/advancedAdapter";
 import type { TransportCommand } from "../hid/hidTransport";
 import { updateCapability } from "./capabilities";
 import type { CapabilityMap } from "./types";
@@ -16,6 +17,7 @@ export interface CapabilityProbeResult {
   supportedPollingRates: readonly PollingRate[];
   idleTime: IdleTimeResult | null;
   lowBatteryThreshold: LowBatteryThresholdResult | null;
+  advancedSettings: AdvancedSettings | null;
 }
 
 export async function runCapabilityProbe(
@@ -31,6 +33,7 @@ export async function runCapabilityProbe(
   let supportedPollingRates: readonly PollingRate[] = [];
   let idleTime: IdleTimeResult | null = null;
   let lowBatteryThreshold: LowBatteryThresholdResult | null = null;
+  let advancedSettings: AdvancedSettings | null = null;
 
   try {
     battery = await readBattery(command);
@@ -103,7 +106,14 @@ export async function runCapabilityProbe(
     lowBatteryThreshold = null;
   }
 
+  try {
+    advancedSettings = await readAdvancedSettings(command);
+  } catch {
+    advancedSettings = null;
+  }
+
   return {
+    advancedSettings,
     capabilities,
     battery,
     charging,

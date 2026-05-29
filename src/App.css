@@ -640,7 +640,8 @@ h2 {
   border-radius: 8px;
   display: grid;
   gap: 4px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(max-content, 1fr));
+  overflow-x: auto;
   padding: 4px;
 }
 
@@ -651,7 +652,9 @@ h2 {
   color: var(--muted);
   cursor: pointer;
   font-weight: 700;
+  min-width: 0;
   padding: 9px 10px;
+  white-space: nowrap;
 }
 
 .ui-tabs-trigger[data-state="active"] {
@@ -1291,6 +1294,244 @@ h2 {
   margin-top: 2px;
 }
 
+.advancedStack {
+  display: grid;
+  gap: 16px;
+}
+
+.dynamicSensitivityPanel,
+.rotationPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.advancedHeader {
+  align-items: flex-start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.advancedHeader .ui-switch {
+  margin-top: 2px;
+}
+
+.dynamicModeGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dynamicModeButton.ui-button {
+  min-height: 38px;
+}
+
+.dynamicModeButton.active.ui-button {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-soft-text);
+}
+
+.dynamicTemplateSelect {
+  align-items: center;
+  color: var(--text);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(180px, 260px);
+  justify-content: end;
+}
+
+.dynamicTemplateSelect > span {
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.dynamicTemplateSelect .ui-select-trigger {
+  min-height: 34px;
+}
+
+.dynamicCurve {
+  background:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px),
+    var(--panel);
+  background-size: 100% 25%, 12.5% 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  height: 180px;
+  overflow: hidden;
+}
+
+.dynamicCurve svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.dynamicCurve polygon {
+  fill: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.dynamicCurve polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.rotationPanel {
+  gap: 12px;
+  padding: 28px 32px 24px;
+}
+
+.rotationTitleRow {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.rotationPanel .rotationTitle {
+  color: var(--accent);
+  display: inline;
+  font-size: 1rem;
+  font-weight: 900;
+  margin: 0;
+}
+
+.rotationDescription {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.rotationPanel .rotationToolLink {
+  color: var(--text-strong);
+  display: inline;
+  font-size: inherit;
+  font-weight: 800;
+  margin: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rotationPreview {
+  height: 190px;
+  margin: -2px auto 0;
+  max-width: 440px;
+  position: relative;
+  width: min(100%, 440px);
+}
+
+.rotationAxis {
+  border-color: color-mix(in srgb, var(--muted) 64%, transparent);
+  border-style: dotted;
+  border-width: 0;
+  opacity: 0.58;
+  position: absolute;
+  z-index: 0;
+}
+
+.rotationAxisHorizontal {
+  border-top-width: 2px;
+  height: 0;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.rotationAxisVertical {
+  border-left-width: 2px;
+  bottom: 10%;
+  height: auto;
+  left: 50%;
+  top: 10%;
+  transform: translateX(-50%);
+  width: 0;
+}
+
+.rotationMousePreview {
+  display: block;
+  height: 134px;
+  left: 50%;
+  object-fit: contain;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(var(--rotation-angle, 0deg));
+  transform-origin: center;
+  transition: transform 120ms ease;
+  width: 86px;
+  z-index: 1;
+}
+
+.rotationControl {
+  display: grid;
+  gap: 8px;
+}
+
+.rotationSliderWrap {
+  padding-top: 26px;
+  position: relative;
+}
+
+.rotationSliderValue {
+  background: var(--accent);
+  border-radius: 4px;
+  color: var(--accent-text);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  left: clamp(18px, var(--slider-progress, 50%), calc(100% - 18px));
+  line-height: 1;
+  min-width: 34px;
+  padding: 6px 8px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.rotationSliderValue::after {
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--accent);
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 100%;
+  transform: translateX(-50%);
+}
+
+.rotationRange {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rotationRange span {
+  color: var(--muted);
+  display: inline;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.rotationRange span:nth-child(2) {
+  text-align: center;
+}
+
+.rotationRange span:nth-child(3) {
+  text-align: right;
+}
+
 .ui-switch {
   background: var(--border-strong);
   border: 2px solid var(--muted);
@@ -1660,6 +1901,15 @@ h2 {
 
   .mouseTestStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dynamicModeGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dynamicTemplateSelect {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
   }
 
   .debugDock {

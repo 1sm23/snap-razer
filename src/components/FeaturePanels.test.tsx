@@ -113,6 +113,65 @@ describe("FeaturePanels", () => {
     expect(html).not.toContain("Browser limited");
   });
 
+  it("renders advanced dynamic sensitivity and rotation controls when probes succeeded", () => {
+    const html = renderToStaticMarkup(
+      <FeaturePanels
+        advancedSettings={{
+          dynamicSensitivity: { enabled: true, mode: "natural", profileId: 1 },
+          rotation: { angle: -12, enabled: true, profileId: 1 }
+        }}
+        applyingDpi={false}
+        applyingPollingRate={false}
+        battery={null}
+        charging={null}
+        dpi={null}
+        dpiStages={null}
+        dpiStagesDraft={{ activeStage: 1, stages: [{ id: 1, x: 800, y: 800 }] }}
+        initialTab="advanced"
+        onApplyDpiStages={vi.fn()}
+        onApplyPollingRate={vi.fn()}
+        onDpiStagesDraftChange={vi.fn()}
+        pollingRate={null}
+        supportedPollingRates={[]}
+      />
+    );
+
+    expect(html).toContain("Dynamic Sensitivity");
+    expect(html).toContain("Natural");
+    expect(html).toContain("aria-pressed=\"true\"");
+    expect(html).toContain("Rotation");
+    expect(html).toContain("-12°");
+    expect(html).toContain("Rotation angle");
+  });
+
+  it("renders dynamic sensitivity custom template choices", () => {
+    const html = renderToStaticMarkup(
+      <FeaturePanels
+        advancedSettings={{
+          dynamicSensitivity: { enabled: true, mode: "custom", profileId: 1 },
+          rotation: { angle: 0, enabled: false, profileId: 1 }
+        }}
+        applyingDpi={false}
+        applyingPollingRate={false}
+        battery={null}
+        charging={null}
+        dpi={null}
+        dpiStages={null}
+        dpiStagesDraft={{ activeStage: 1, stages: [{ id: 1, x: 800, y: 800 }] }}
+        initialTab="advanced"
+        onApplyDpiStages={vi.fn()}
+        onApplyPollingRate={vi.fn()}
+        onDpiStagesDraftChange={vi.fn()}
+        pollingRate={null}
+        supportedPollingRates={[]}
+      />
+    );
+
+    expect(html).toContain("Custom");
+    expect(html).toContain("Choose template");
+    expect(html).toContain("role=\"combobox\"");
+  });
+
   it("updates button mapping assignments and custom shortcut text", async () => {
     const container = document.createElement("div");
     document.body.append(container);

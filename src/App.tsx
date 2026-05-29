@@ -27,6 +27,13 @@ import {
 import { readDpiStages, writeDpiStages, type DpiStages, type DpiValue } from "./features/dpiAdapter";
 import { setPollingRate, type PollingRate } from "./features/pollingRateAdapter";
 import {
+  setDynamicSensitivity,
+  setRotation,
+  type AdvancedSettings,
+  type DynamicSensitivitySettings,
+  type RotationSettings
+} from "./features/advancedAdapter";
+import {
   setIdleTime,
   setLowBatteryThreshold,
   type IdleTimeResult,
@@ -79,6 +86,7 @@ export default function App() {
   const [supportedPollingRates, setSupportedPollingRates] = useState<readonly PollingRate[]>([]);
   const [idleTime, setIdleTimeValue] = useState<IdleTimeResult | null>(null);
   const [lowBatteryThreshold, setLowBatteryThresholdValue] = useState<LowBatteryThresholdResult | null>(null);
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings | null>(null);
   const [buttonMappings, setButtonMappings] = useState<ButtonMapping[]>(() => readStoredButtonMappings());
   const [logs, setLogs] = useState<HidLogEntry[]>([]);
   const [debugEnabled, setDebugEnabled] = useState(false);
@@ -90,6 +98,8 @@ export default function App() {
   const [applyingPollingRate, setApplyingPollingRate] = useState(false);
   const [applyingIdleTime, setApplyingIdleTime] = useState(false);
   const [applyingLowBatteryThreshold, setApplyingLowBatteryThreshold] = useState(false);
+  const [applyingDynamicSensitivity, setApplyingDynamicSensitivity] = useState(false);
+  const [applyingRotation, setApplyingRotation] = useState(false);
   const [error, setError] = useState<string | LocalizedMessage | null>(null);
   const autoConnectAttemptedRef = useRef(false);
   const currentDeviceRef = useRef<ConnectedDevice | null>(null);
@@ -142,8 +152,22 @@ export default function App() {
 
   useEffect(() => {
     manualCommandInProgressRef.current =
-      connecting || applyingDpi || applyingPollingRate || applyingIdleTime || applyingLowBatteryThreshold;
-  }, [applyingDpi, applyingIdleTime, applyingLowBatteryThreshold, applyingPollingRate, connecting]);
+      connecting ||
+      applyingDpi ||
+      applyingPollingRate ||
+      applyingIdleTime ||
+      applyingLowBatteryThreshold ||
+      applyingDynamicSensitivity ||
+      applyingRotation;
+  }, [
+    applyingDpi,
+    applyingDynamicSensitivity,
+    applyingIdleTime,
+    applyingLowBatteryThreshold,
+    applyingPollingRate,
+    applyingRotation,
+    connecting
+  ]);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -289,6 +313,7 @@ export default function App() {
       setSupportedPollingRates(probeResult.supportedPollingRates);
       setIdleTimeValue(probeResult.idleTime);
       setLowBatteryThresholdValue(probeResult.lowBatteryThreshold);
+      setAdvancedSettings(probeResult.advancedSettings);
       setLogs(transport.snapshot().logs);
       return true;
     } catch (caught) {
@@ -349,6 +374,7 @@ export default function App() {
     setSupportedPollingRates([]);
     setIdleTimeValue(null);
     setLowBatteryThresholdValue(null);
+    setAdvancedSettings(null);
     setCapabilities(initialCapabilities);
   }
 
@@ -500,6 +526,42 @@ export default function App() {
     }
   }
 
+  async function handleApplyDynamicSensitivity(nextSettings: DynamicSensitivitySettings) {
+    setApplyingDynamicSensitivity(true);
+    setError(null);
+
+    try {
+      const appliedDynamicSensitivity = await setDynamicSensitivity(transport.command, nextSettings);
+      setAdvancedSettings((currentSettings) =>
+        currentSettings ? { ...currentSettings, dynamicSensitivity: appliedDynamicSensitivity } : null
+      );
+      setLogs(transport.snapshot().logs);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+      setLogs(transport.snapshot().logs);
+    } finally {
+      setApplyingDynamicSensitivity(false);
+    }
+  }
+
+  async function handleApplyRotation(nextSettings: RotationSettings) {
+    setApplyingRotation(true);
+    setError(null);
+
+    try {
+      const appliedRotation = await setRotation(transport.command, nextSettings);
+      setAdvancedSettings((currentSettings) =>
+        currentSettings ? { ...currentSettings, rotation: appliedRotation } : null
+      );
+      setLogs(transport.snapshot().logs);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+      setLogs(transport.snapshot().logs);
+    } finally {
+      setApplyingRotation(false);
+    }
+  }
+
   function handleDebugEnabledChange(enabled: boolean) {
     setDebugEnabled(enabled);
     setDebugPanelOpen(false);
@@ -577,10 +639,13 @@ export default function App() {
       <section className="consoleGrid">
         <CapabilityMatrix capabilities={capabilities} />
         <FeaturePanels
+          advancedSettings={advancedSettings}
           applyingDpi={applyingDpi}
+          applyingDynamicSensitivity={applyingDynamicSensitivity}
           applyingIdleTime={applyingIdleTime}
           applyingLowBatteryThreshold={applyingLowBatteryThreshold}
           applyingPollingRate={applyingPollingRate}
+          applyingRotation={applyingRotation}
           battery={battery}
           buttonMappings={buttonMappings}
           charging={charging}
@@ -590,9 +655,11 @@ export default function App() {
           idleTime={idleTime}
           lowBatteryThreshold={lowBatteryThreshold}
           onApplyDpiStages={handleApplyDpiStages}
+          onApplyDynamicSensitivity={handleApplyDynamicSensitivity}
           onApplyIdleTime={handleApplyIdleTime}
           onApplyLowBatteryThreshold={handleApplyLowBatteryThreshold}
           onApplyPollingRate={handleApplyPollingRate}
+          onApplyRotation={handleApplyRotation}
           onButtonMappingChange={handleButtonMappingChange}
           onButtonMappingCustomKeysChange={handleButtonMappingCustomKeysChange}
           onDpiStagesDraftChange={setDpiStagesDraft}

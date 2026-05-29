@@ -2,6 +2,13 @@ import rotateCcwIcon from "@iconify-icons/lucide/rotate-ccw";
 import { Icon } from "@iconify/react";
 import { flushSync } from "react-dom";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  DYNAMIC_SENSITIVITY_MODES,
+  type AdvancedSettings,
+  type DynamicSensitivityMode,
+  type DynamicSensitivitySettings,
+  type RotationSettings
+} from "../features/advancedAdapter";
 import type { BatteryResult, ChargingResult } from "../features/batteryAdapter";
 import {
   BUTTON_ACTION_OPTIONS,
@@ -13,6 +20,7 @@ import type { PollingRate } from "../features/pollingRateAdapter";
 import type { IdleTimeResult, LowBatteryThresholdResult } from "../features/powerAdapter";
 import { useI18n, type MessageKey } from "../i18n";
 import { cn } from "../lib/utils";
+import rotationMouseIcon from "../assets/rotation-mouse.svg";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -21,13 +29,14 @@ import { Slider } from "./ui/slider";
 import { Switch } from "./ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
-type ControlTab = "customize" | "performance" | "power";
+type ControlTab = "customize" | "performance" | "power" | "advanced";
 type DpiAxis = "x" | "y";
 
 const tabs: Array<{ id: ControlTab; labelKey: MessageKey }> = [
   { id: "customize", labelKey: "controls.customize" },
   { id: "performance", labelKey: "controls.performance" },
-  { id: "power", labelKey: "controls.power" }
+  { id: "power", labelKey: "controls.power" },
+  { id: "advanced", labelKey: "controls.advanced" }
 ];
 
 const DPI_MIN = 100;
@@ -43,6 +52,69 @@ const DPI_STAGE_SWATCHES = [
 const MOUSE_TEST_WINDOW_MS = 1000;
 const MOUSE_TEST_HISTORY_MAX = 80;
 const MOUSE_TEST_MAX_DOTS = 50;
+const ROTATION_MIN = -44;
+const ROTATION_MAX = 44;
+const DYNAMIC_CURVE_X_MAX = 70;
+const DYNAMIC_CURVE_Y_MIN = 0.98;
+const DYNAMIC_CURVE_Y_MAX = 1.62;
+interface DynamicSensitivityCurvePoint {
+  x: number;
+  y: number;
+}
+
+const DYNAMIC_SENSITIVITY_CURVES: Record<DynamicSensitivityMode, DynamicSensitivityCurvePoint[]> = {
+  classic: [
+    { x: 0, y: 1 },
+    { x: 10, y: 1.04 },
+    { x: 20, y: 1.09 },
+    { x: 30, y: 1.14 },
+    { x: 40, y: 1.19 },
+    { x: 50, y: 1.24 },
+    { x: 60, y: 1.29 },
+    { x: 70, y: 1.35 }
+  ],
+  natural: [
+    { x: 0, y: 1 },
+    { x: 3, y: 1.14 },
+    { x: 6, y: 1.29 },
+    { x: 9, y: 1.41 },
+    { x: 12, y: 1.46 },
+    { x: 16, y: 1.49 },
+    { x: 20, y: 1.5 },
+    { x: 70, y: 1.5 }
+  ],
+  jump: [
+    { x: 0, y: 1 },
+    { x: 10, y: 1 },
+    { x: 12, y: 1.04 },
+    { x: 14, y: 1.15 },
+    { x: 16, y: 1.3 },
+    { x: 18, y: 1.43 },
+    { x: 20, y: 1.5 },
+    { x: 70, y: 1.5 }
+  ],
+  custom: [
+    { x: 0, y: 1 },
+    { x: 10, y: 1.04 },
+    { x: 20, y: 1.09 },
+    { x: 30, y: 1.14 },
+    { x: 40, y: 1.19 },
+    { x: 50, y: 1.24 },
+    { x: 60, y: 1.29 },
+    { x: 70, y: 1.35 }
+  ]
+};
+const DYNAMIC_SENSITIVITY_TEMPLATE_OPTIONS = ["classic", "natural", "jump", "none"] as const;
+type DynamicSensitivityTemplate = (typeof DYNAMIC_SENSITIVITY_TEMPLATE_OPTIONS)[number];
+const DYNAMIC_SENSITIVITY_TEMPLATE_CURVES: Record<DynamicSensitivityTemplate, DynamicSensitivityCurvePoint[]> = {
+  classic: DYNAMIC_SENSITIVITY_CURVES.classic,
+  natural: DYNAMIC_SENSITIVITY_CURVES.natural,
+  jump: DYNAMIC_SENSITIVITY_CURVES.jump,
+  none: [
+    { x: 0, y: 1 },
+    { x: 70, y: 1 }
+  ]
+};
 
 interface MouseTestStats {
   intervalUs: number | null;
@@ -55,6 +127,7 @@ interface MouseTestStats {
 }
 
 interface FeaturePanelsProps {
+  advancedSettings?: AdvancedSettings | null;
   battery: BatteryResult | null;
   buttonMappings?: readonly ButtonMapping[];
   charging: ChargingResult | null;
@@ -64,23 +137,28 @@ interface FeaturePanelsProps {
   pollingRate: PollingRate | null;
   supportedPollingRates: readonly PollingRate[];
   applyingDpi: boolean;
+  applyingDynamicSensitivity?: boolean;
   applyingIdleTime?: boolean;
   applyingLowBatteryThreshold?: boolean;
   applyingPollingRate: boolean;
+  applyingRotation?: boolean;
   initialTab?: ControlTab;
   idleTime?: IdleTimeResult | null;
   lowBatteryThreshold?: LowBatteryThresholdResult | null;
   onDpiStagesDraftChange: (dpiStages: DpiStages) => void;
   onApplyDpiStages: (dpiStages: DpiStages, mode?: "immediate" | "debounced") => void;
+  onApplyDynamicSensitivity?: (settings: DynamicSensitivitySettings) => void;
   onApplyIdleTime?: (minutes: number) => void;
   onApplyLowBatteryThreshold?: (percent: number) => void;
   onApplyPollingRate: (pollingRate: PollingRate) => void;
+  onApplyRotation?: (settings: RotationSettings) => void;
   onButtonMappingChange?: (buttonId: string, action: ButtonMapping["action"]) => void;
   onButtonMappingCustomKeysChange?: (buttonId: string, customKeys: string) => void;
   onResetButtonMappings?: () => void;
 }
 
 export function FeaturePanels({
+  advancedSettings = null,
   battery,
   buttonMappings = BUTTON_DEFINITIONS.map((definition) => definition.defaultMapping),
   charging,
@@ -90,17 +168,21 @@ export function FeaturePanels({
   pollingRate,
   supportedPollingRates,
   applyingDpi,
+  applyingDynamicSensitivity = false,
   applyingIdleTime = false,
   applyingLowBatteryThreshold = false,
   applyingPollingRate,
+  applyingRotation = false,
   initialTab = "performance",
   idleTime = null,
   lowBatteryThreshold = null,
   onDpiStagesDraftChange,
   onApplyDpiStages,
+  onApplyDynamicSensitivity = () => undefined,
   onApplyIdleTime = () => undefined,
   onApplyLowBatteryThreshold = () => undefined,
   onApplyPollingRate,
+  onApplyRotation = () => undefined,
   onButtonMappingChange = () => undefined,
   onButtonMappingCustomKeysChange = () => undefined,
   onResetButtonMappings = () => undefined
@@ -378,8 +460,236 @@ export function FeaturePanels({
               </ControlTile>
             </div>
           </TabsContent>
+
+          <TabsContent
+            aria-labelledby="advanced-tab"
+            className="controlSections"
+            id="advanced-panel"
+            value="advanced"
+          >
+            <div className="advancedStack">
+              <DynamicSensitivityPanel
+                applying={applyingDynamicSensitivity}
+                settings={advancedSettings?.dynamicSensitivity ?? null}
+                onApply={onApplyDynamicSensitivity}
+              />
+              <RotationPanel
+                applying={applyingRotation}
+                settings={advancedSettings?.rotation ?? null}
+                onApply={onApplyRotation}
+              />
+            </div>
+          </TabsContent>
         </Tabs>
       </CardContent>
+    </Card>
+  );
+}
+
+function DynamicSensitivityPanel({
+  applying,
+  settings,
+  onApply
+}: {
+  applying: boolean;
+  settings: DynamicSensitivitySettings | null;
+  onApply: (settings: DynamicSensitivitySettings) => void;
+}) {
+  const { t } = useI18n();
+  const [customTemplate, setCustomTemplate] = useState<DynamicSensitivityTemplate>("classic");
+  const disabled = !settings || applying;
+  const selectedMode = settings?.mode ?? "classic";
+  const curveValues =
+    selectedMode === "custom"
+      ? DYNAMIC_SENSITIVITY_TEMPLATE_CURVES[customTemplate]
+      : DYNAMIC_SENSITIVITY_CURVES[selectedMode];
+
+  const applySettings = (patch: Partial<DynamicSensitivitySettings>) => {
+    if (!settings) {
+      return;
+    }
+
+    onApply({ ...settings, ...patch });
+  };
+
+  return (
+    <ControlTile
+      className="dynamicSensitivityPanel"
+      disabled={!settings}
+      eyebrow={t("advanced.dynamicSensitivity")}
+    >
+      <div className="advancedHeader">
+        <p>{settings ? t("advanced.dynamicSensitivityDescription") : t("advanced.probeFailed")}</p>
+        <Switch
+          aria-label={t("advanced.dynamicSensitivity")}
+          checked={settings?.enabled ?? false}
+          disabled={disabled}
+          onClick={() => applySettings({ enabled: !settings?.enabled })}
+        />
+      </div>
+      <div className="dynamicModeGrid">
+        {DYNAMIC_SENSITIVITY_MODES.map((mode) => (
+          <Button
+            aria-pressed={selectedMode === mode}
+            className={selectedMode === mode ? "dynamicModeButton active" : "dynamicModeButton"}
+            disabled={disabled || !settings?.enabled}
+            key={mode}
+            type="button"
+            variant="outline"
+            onClick={() => applySettings({ enabled: true, mode })}
+          >
+            {t(`advanced.dynamicSensitivity.${mode}` as MessageKey)}
+          </Button>
+        ))}
+      </div>
+      {selectedMode === "custom" ? (
+        <label className="dynamicTemplateSelect">
+          <span>{t("advanced.dynamicSensitivity.template")}</span>
+          <Select
+            disabled={disabled || !settings?.enabled}
+            value={customTemplate}
+            onValueChange={(value) => setCustomTemplate(value as DynamicSensitivityTemplate)}
+          >
+            <SelectTrigger aria-label={t("advanced.dynamicSensitivity.template")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DYNAMIC_SENSITIVITY_TEMPLATE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option === "none"
+                    ? t("advanced.dynamicSensitivity.template.none")
+                    : t(`advanced.dynamicSensitivity.${option}` as MessageKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      ) : null}
+      <DynamicSensitivityCurve values={curveValues} />
+    </ControlTile>
+  );
+}
+
+function DynamicSensitivityCurve({ values }: { values: readonly DynamicSensitivityCurvePoint[] }) {
+  const svgPoints = values
+    .map((point) => {
+      const x = (clampNumber(point.x, 0, DYNAMIC_CURVE_X_MAX) / DYNAMIC_CURVE_X_MAX) * 100;
+      const y =
+        ((DYNAMIC_CURVE_Y_MAX - clampCurveValue(point.y)) / (DYNAMIC_CURVE_Y_MAX - DYNAMIC_CURVE_Y_MIN)) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const areaPoints = `0,100 ${svgPoints} 100,100`;
+
+  return (
+    <div className="dynamicCurve" aria-hidden="true">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <polygon points={areaPoints} />
+        <polyline points={svgPoints} />
+      </svg>
+    </div>
+  );
+}
+
+function RotationPanel({
+  applying,
+  settings,
+  onApply
+}: {
+  applying: boolean;
+  settings: RotationSettings | null;
+  onApply: (settings: RotationSettings) => void;
+}) {
+  const { t } = useI18n();
+  const [draftAngle, setDraftAngle] = useState(settings?.angle ?? 0);
+  const disabled = !settings || applying;
+
+  useEffect(() => {
+    setDraftAngle(settings?.angle ?? 0);
+  }, [settings?.angle]);
+
+  const applySettings = (patch: Partial<RotationSettings>) => {
+    if (!settings) {
+      return;
+    }
+
+    onApply({ ...settings, ...patch });
+  };
+
+  const commitAngle = () => {
+    if (!settings) {
+      return;
+    }
+
+    const nextAngle = clampNumber(draftAngle, ROTATION_MIN, ROTATION_MAX);
+    setDraftAngle(nextAngle);
+    if (nextAngle !== settings.angle) {
+      applySettings({ angle: nextAngle });
+    }
+  };
+
+  const sliderProgress = `${((draftAngle - ROTATION_MIN) / (ROTATION_MAX - ROTATION_MIN)) * 100}%`;
+  const rotationStyle = {
+    "--rotation-angle": `${draftAngle}deg`,
+    "--slider-progress": sliderProgress
+  } as CSSProperties;
+
+  return (
+    <Card className={cn("controlTile", !settings && "disabledTile", "rotationPanel")}>
+      <div className="rotationTitleRow">
+        <span className="rotationTitle">{t("advanced.rotation")}</span>
+        <Switch
+          aria-label={t("advanced.rotation")}
+          checked={settings?.enabled ?? false}
+          disabled={disabled}
+          onClick={() => applySettings({ enabled: !settings?.enabled })}
+        />
+      </div>
+      <p className="rotationDescription">
+        {settings ? (
+          <>
+            {t("advanced.rotationDescription")} {t("advanced.rotationDetails")}{" "}
+            <a
+              className="rotationToolLink"
+              href="https://www.razer.com/technology/mouse-rotation-tool"
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("advanced.rotationToolLink")}
+            </a>
+          </>
+        ) : (
+          t("advanced.probeFailed")
+        )}
+      </p>
+      <div className="rotationPreview" style={rotationStyle} aria-hidden="true">
+        <div className="rotationAxis rotationAxisHorizontal" />
+        <div className="rotationAxis rotationAxisVertical" />
+        <img className="rotationMousePreview" src={rotationMouseIcon} alt="" />
+      </div>
+      <div className="rotationControl" style={rotationStyle}>
+        <div className="rotationSliderWrap">
+          <output className="rotationSliderValue">{draftAngle}&deg;</output>
+          <Slider
+            aria-label={t("advanced.rotationAngle")}
+            disabled={disabled || !settings?.enabled}
+            min={ROTATION_MIN}
+            max={ROTATION_MAX}
+            step={1}
+            value={draftAngle}
+            onBlur={commitAngle}
+            onChange={(event) => setDraftAngle(Number(event.target.value))}
+            onKeyUp={commitAngle}
+            onMouseUp={commitAngle}
+            onPointerUp={commitAngle}
+          />
+        </div>
+        <div className="rotationRange" aria-hidden="true">
+          <span>{ROTATION_MIN}&deg;</span>
+          <span>{draftAngle}&deg;</span>
+          <span>{ROTATION_MAX}&deg;</span>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1100,6 +1410,10 @@ function clampNumber(value: number, min: number, max: number): number {
   }
 
   return Math.min(Math.max(value, min), max);
+}
+
+function clampCurveValue(value: number): number {
+  return Math.min(Math.max(value, DYNAMIC_CURVE_Y_MIN), DYNAMIC_CURVE_Y_MAX);
 }
 
 function median(values: number[]): number {
