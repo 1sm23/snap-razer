@@ -179,6 +179,18 @@ describe("HidTransport", () => {
     ]);
   });
 
+  it("can send background commands without recording debug logs", async () => {
+    vi.useFakeTimers();
+    const device = makeDevice(async () => makeOffsetResponse());
+    const transport = await connectTransport(device);
+
+    const result = transport.command({ ...makeRequest(), log: false });
+    await vi.advanceTimersByTimeAsync(100);
+    await result;
+
+    expect(transport.snapshot().logs).toEqual([]);
+  });
+
   it("selects a Razer interface that exposes feature reports", async () => {
     const inputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
       productName: "Razer Mouse Input",

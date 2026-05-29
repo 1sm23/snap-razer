@@ -35,6 +35,11 @@ export interface DpiStages {
   stages: DpiStage[];
 }
 
+interface DpiReadOptions {
+  commandName?: string;
+  log?: boolean;
+}
+
 export async function readDpi(command: TransportCommand): Promise<DpiValue> {
   const response = await command(buildDpiRequest("Read DPI", DPI_GET_COMMAND_ID, DPI_DATA_SIZE, new Uint8Array([NOSTORE])));
   assertDpiResponse(response, DPI_GET_COMMAND_ID, "DPI");
@@ -69,9 +74,15 @@ export async function setDpi(command: TransportCommand, dpi: DpiValue): Promise<
   return dpi;
 }
 
-export async function readDpiStages(command: TransportCommand): Promise<DpiStages> {
+export async function readDpiStages(command: TransportCommand, options: DpiReadOptions = {}): Promise<DpiStages> {
   const response = await command(
-    buildDpiRequest("Read DPI stages", DPI_STAGES_GET_COMMAND_ID, DPI_STAGES_DATA_SIZE, new Uint8Array([VARSTORE]))
+    buildDpiRequest(
+      options.commandName ?? "Read DPI stages",
+      DPI_STAGES_GET_COMMAND_ID,
+      DPI_STAGES_DATA_SIZE,
+      new Uint8Array([VARSTORE]),
+      options.log
+    )
   );
   assertDpiResponse(response, DPI_STAGES_GET_COMMAND_ID, "DPI stages");
 
@@ -132,11 +143,13 @@ function buildDpiRequest(
   commandName: string,
   commandId: number,
   dataSize: number,
-  payload: Uint8Array
+  payload: Uint8Array,
+  log?: boolean
 ): ProtocolRequest {
   return {
     reportId: RAZER_REPORT_ID,
     commandName,
+    log,
     bytes: buildRazerReport({
       commandClass: DPI_COMMAND_CLASS,
       commandId,

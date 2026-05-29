@@ -4,7 +4,8 @@ import {
   readAutoConnectBlocked,
   readStoredDpiStagesLayout,
   storeAutoConnectBlocked,
-  storeDpiStagesLayout
+  storeDpiStagesLayout,
+  syncActiveDpiStageFromHardware
 } from "./App";
 
 beforeEach(() => {
@@ -78,5 +79,52 @@ describe("dpi stage layout persistence", () => {
         { enabled: true, id: 5, x: 6400, y: 6400 }
       ]
     });
+  });
+});
+
+describe("hardware dpi stage sync", () => {
+  it("updates only the active stage when the mouse cycles DPI in hardware", () => {
+    const currentStages = {
+      activeStage: 1,
+      stages: [
+        { enabled: true, id: 1, x: 400, y: 400 },
+        { enabled: true, id: 2, x: 800, y: 800 },
+        { enabled: true, id: 3, x: 1600, y: 1600 }
+      ]
+    };
+
+    expect(
+      syncActiveDpiStageFromHardware(currentStages, {
+        activeStage: 3,
+        stages: [
+          { enabled: true, id: 1, x: 450, y: 450 },
+          { enabled: true, id: 2, x: 850, y: 850 },
+          { enabled: true, id: 3, x: 1650, y: 1650 }
+        ]
+      })
+    ).toEqual({
+      activeStage: 3,
+      stages: currentStages.stages
+    });
+  });
+
+  it("ignores hardware active stages that are disabled in the local layout", () => {
+    const currentStages = {
+      activeStage: 2,
+      stages: [
+        { enabled: false, id: 1, x: 400, y: 400 },
+        { enabled: true, id: 2, x: 800, y: 800 }
+      ]
+    };
+
+    expect(
+      syncActiveDpiStageFromHardware(currentStages, {
+        activeStage: 1,
+        stages: [
+          { enabled: true, id: 1, x: 400, y: 400 },
+          { enabled: true, id: 2, x: 800, y: 800 }
+        ]
+      })
+    ).toBe(currentStages);
   });
 });

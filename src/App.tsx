@@ -8,7 +8,12 @@ import { DebugLog } from "./components/DebugLog";
 import { FeaturePanels } from "./components/FeaturePanels";
 import { Header } from "./components/Header";
 import { toast } from "./components/ui/use-toast";
-import { createInitialCapabilities, didAllActiveProbesFail, markWritableInterfaceUnavailable } from "./domain/capabilities";
+import {
+  createInitialCapabilities,
+  didAllActiveProbesFail,
+  markWritableInterfaceUnavailable,
+  updateCapability
+} from "./domain/capabilities";
 import { runCapabilityProbe } from "./domain/capabilityProbe";
 import type { CapabilityMap, ConnectedDevice, HidLogEntry, LocalizedMessage } from "./domain/types";
 import type { BatteryResult, ChargingResult } from "./features/batteryAdapter";
@@ -19,7 +24,7 @@ import {
   updateButtonMappingCustomKeys,
   type ButtonMapping
 } from "./features/buttonAdapter";
-import { writeDpiStages, type DpiStages, type DpiValue } from "./features/dpiAdapter";
+import { readDpiStages, writeDpiStages, type DpiStages, type DpiValue } from "./features/dpiAdapter";
 import { setPollingRate, type PollingRate } from "./features/pollingRateAdapter";
 import {
   setIdleTime,
@@ -52,6 +57,7 @@ const DEFAULT_DPI_STAGES: DpiStages = {
   ]
 };
 const DPI_APPLY_DEBOUNCE_MS = 120;
+const DPI_HARDWARE_SYNC_INTERVAL_MS = 750;
 const AUTO_CONNECT_BLOCKED_STORAGE_KEY = "snap-razer-auto-connect-blocked";
 const BUTTON_MAPPINGS_STORAGE_KEY = "snap-razer-button-mappings";
 const DPI_STAGES_LAYOUT_STORAGE_KEY = "snap-razer-dpi-stages-layout";
@@ -87,6 +93,9 @@ export default function App() {
   const [error, setError] = useState<string | LocalizedMessage | null>(null);
   const autoConnectAttemptedRef = useRef(false);
   const currentDeviceRef = useRef<ConnectedDevice | null>(null);
+  const dpiStagesRef = useRef<DpiStages | null>(null);
+  const dpiStagesDraftRef = useRef<DpiStages>(DEFAULT_DPI_STAGES);
+  const manualCommandInProgressRef = useRef(false);
   const pendingDpiAppliesRef = useRef(0);
   const dpiApplyQueueRef = useRef<Promise<void>>(Promise.resolve());
   const dpiApplyTimerRef = useRef<number | null>(null);
@@ -124,6 +133,19 @@ export default function App() {
   }, [device]);
 
   useEffect(() => {
+    dpiStagesRef.current = dpiStages;
+  }, [dpiStages]);
+
+  useEffect(() => {
+    dpiStagesDraftRef.current = dpiStagesDraft;
+  }, [dpiStagesDraft]);
+
+  useEffect(() => {
+    manualCommandInProgressRef.current =
+      connecting || applyingDpi || applyingPollingRate || applyingIdleTime || applyingLowBatteryThreshold;
+  }, [applyingDpi, applyingIdleTime, applyingLowBatteryThreshold, applyingPollingRate, connecting]);
+
+  useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
@@ -142,6 +164,78 @@ export default function App() {
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
+
+  useEffect(() => {
+    if (!device?.featureReportProbeAllowed) {
+      return;
+    }
+
+    let stopped = false;
+    let syncInFlight = false;
+
+    const syncDpiStageFromHardware = async () => {
+      if (
+        stopped ||
+        syncInFlight ||
+        !dpiStagesRef.current ||
+        manualCommandInProgressRef.current ||
+        pendingDpiAppliesRef.current > 0
+      ) {
+        return;
+      }
+
+      syncInFlight = true;
+
+      try {
+        const hardwareStages = mergeDpiStagesWithDefaults(
+          await readDpiStages(transport.command, {
+            commandName: "Sync DPI stage",
+            log: false
+          })
+        );
+
+        if (stopped) {
+          return;
+        }
+
+        const nextDpiStages = syncActiveDpiStageFromHardware(dpiStagesRef.current, hardwareStages);
+        const nextDpiStagesDraft = syncActiveDpiStageFromHardware(dpiStagesDraftRef.current, hardwareStages);
+
+        if (nextDpiStages && nextDpiStages !== dpiStagesRef.current) {
+          dpiStagesRef.current = nextDpiStages;
+          setDpiStages(nextDpiStages);
+        }
+
+        if (nextDpiStagesDraft && nextDpiStagesDraft !== dpiStagesDraftRef.current) {
+          dpiStagesDraftRef.current = nextDpiStagesDraft;
+          setDpiStagesDraft(nextDpiStagesDraft);
+
+          const activeStage = findDpiStageById(nextDpiStagesDraft, nextDpiStagesDraft.activeStage);
+          if (activeStage) {
+            const activeDpi = { x: activeStage.x, y: activeStage.y };
+            setDpiValue(activeDpi);
+            setCapabilities((currentCapabilities) =>
+              updateCapability(currentCapabilities, "dpi", {
+                state: "available",
+                detail: { key: "capability.detail.dpi.available", params: activeDpi }
+              })
+            );
+          }
+        }
+      } catch {
+        // Hardware DPI switching is opportunistic. Keep the existing connected state if a background refresh misses.
+      } finally {
+        syncInFlight = false;
+      }
+    };
+
+    const intervalId = window.setInterval(syncDpiStageFromHardware, DPI_HARDWARE_SYNC_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+    };
+  }, [device, transport]);
 
   const connect = useCallback(async (mode: "authorized" | "request", options: { forceSelection?: boolean } = {}): Promise<boolean> => {
     const hasCurrentDevice = currentDeviceRef.current !== null;
@@ -556,6 +650,25 @@ export function mergeDpiStagesWithDefaults(dpiStages: DpiStages, storedLayout = 
     : stages.find(isDpiStageEnabled)?.id ?? DEFAULT_DPI_STAGES.activeStage;
 
   return { activeStage, stages };
+}
+
+export function syncActiveDpiStageFromHardware(
+  currentStages: DpiStages | null,
+  hardwareStages: DpiStages
+): DpiStages | null {
+  if (!currentStages) {
+    return hardwareStages;
+  }
+
+  if (currentStages.activeStage === hardwareStages.activeStage) {
+    return currentStages;
+  }
+
+  const stageExists = currentStages.stages.some(
+    (stage) => stage.id === hardwareStages.activeStage && isDpiStageEnabled(stage)
+  );
+
+  return stageExists ? { ...currentStages, activeStage: hardwareStages.activeStage } : currentStages;
 }
 
 function restoreDpiStagesFromStoredLayout(dpiStages: DpiStages, storedLayout: DpiStages | null): DpiStages | null {

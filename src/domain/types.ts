@@ -32,6 +32,7 @@ export interface ProtocolRequest {
   reportId: number;
   commandName: string;
   bytes: Uint8Array;
+  log?: boolean;
 }
 
 export interface ProtocolResponse {

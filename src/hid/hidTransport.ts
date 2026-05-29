@@ -151,6 +151,7 @@ export class HidTransport {
       requestHex: bytesToHex(request.bytes),
       descriptorSummary: describeReports(this.device)
     };
+    const shouldLog = request.log !== false;
 
     try {
       const sendAttempts = await sendFeatureReportWithFallback(this.device, request.reportId, request.bytes);
@@ -158,32 +159,36 @@ export class HidTransport {
       const dataView = await this.device.receiveFeatureReport(request.reportId);
       const response = parseRazerResponse(new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength));
 
-      this.logs = [
-        {
-          ...logBase,
-          sendAttempts,
-          responseHex: bytesToHex(response.raw),
-          status: response.status,
-          commandClass: response.commandClass,
-          commandId: response.commandId,
-          parsed: {
-            value: response.value,
-            success: response.success
-          }
-        },
-        ...this.logs
-      ];
+      if (shouldLog) {
+        this.logs = [
+          {
+            ...logBase,
+            sendAttempts,
+            responseHex: bytesToHex(response.raw),
+            status: response.status,
+            commandClass: response.commandClass,
+            commandId: response.commandId,
+            parsed: {
+              value: response.value,
+              success: response.success
+            }
+          },
+          ...this.logs
+        ];
+      }
 
       return response;
     } catch (error) {
-      this.logs = [
-        {
-          ...logBase,
-          sendAttempts: buildSendCandidates(request.reportId, request.bytes).map(formatSendAttempt),
-          error: error instanceof Error ? error.message : String(error)
-        },
-        ...this.logs
-      ];
+      if (shouldLog) {
+        this.logs = [
+          {
+            ...logBase,
+            sendAttempts: buildSendCandidates(request.reportId, request.bytes).map(formatSendAttempt),
+            error: error instanceof Error ? error.message : String(error)
+          },
+          ...this.logs
+        ];
+      }
       throw error;
     }
   };
