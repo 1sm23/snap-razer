@@ -3,6 +3,7 @@ import {
   BATTERY_COMMAND_ID,
   RAZER_COMMAND_CLASS_DEVICE,
   RAZER_REPORT_ID,
+  RAZER_STATUS_BUSY,
   RAZER_VENDOR_ID,
   buildRazerReport,
   bytesToHex,
@@ -21,6 +22,10 @@ export interface RequestAndOpenOptions {
 }
 
 const RAZER_REQUEST_FILTERS: HIDDeviceFilter[] = [{ vendorId: RAZER_VENDOR_ID }];
+const COMMAND_RESPONSE_INITIAL_DELAY_MS = 100;
+const CONTROL_PROBE_RESPONSE_INITIAL_DELAY_MS = 35;
+const BUSY_RESPONSE_RETRY_DELAY_MS = 50;
+const BUSY_RESPONSE_MAX_RETRIES = 10;
 
 const CONTROL_PROBE_REPORT = buildRazerReport({
   commandClass: RAZER_COMMAND_CLASS_DEVICE,
@@ -155,9 +160,11 @@ export class HidTransport {
 
     try {
       const sendAttempts = await sendFeatureReportWithFallback(this.device, request.reportId, request.bytes);
-      await sleep(100);
-      const dataView = await this.device.receiveFeatureReport(request.reportId);
-      const response = parseRazerResponse(new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength));
+      const response = await receiveRazerResponseAfterBusyPoll(
+        this.device,
+        request.reportId,
+        COMMAND_RESPONSE_INITIAL_DELAY_MS
+      );
 
       if (shouldLog) {
         this.logs = [
@@ -315,9 +322,11 @@ async function canUseControlProbe(device: HIDDevice): Promise<boolean> {
     }
 
     await sendFeatureReportWithFallback(device, RAZER_REPORT_ID, CONTROL_PROBE_REPORT);
-    await sleep(35);
-    const dataView = await device.receiveFeatureReport(RAZER_REPORT_ID);
-    const response = parseRazerResponse(new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength));
+    const response = await receiveRazerResponseAfterBusyPoll(
+      device,
+      RAZER_REPORT_ID,
+      CONTROL_PROBE_RESPONSE_INITIAL_DELAY_MS
+    );
     usable =
       response.success &&
       response.commandClass === RAZER_COMMAND_CLASS_DEVICE &&
@@ -358,6 +367,28 @@ async function sendFeatureReportWithFallback(device: HIDDevice, reportId: number
   }
 
   throw new Error(attempts.join(" | "));
+}
+
+async function receiveRazerResponseAfterBusyPoll(
+  device: HIDDevice,
+  reportId: number,
+  initialDelayMs: number
+): Promise<ProtocolResponse> {
+  await sleep(initialDelayMs);
+
+  let response = await receiveRazerResponse(device, reportId);
+
+  for (let retry = 0; response.status === RAZER_STATUS_BUSY && retry < BUSY_RESPONSE_MAX_RETRIES; retry += 1) {
+    await sleep(BUSY_RESPONSE_RETRY_DELAY_MS);
+    response = await receiveRazerResponse(device, reportId);
+  }
+
+  return response;
+}
+
+async function receiveRazerResponse(device: HIDDevice, reportId: number): Promise<ProtocolResponse> {
+  const dataView = await device.receiveFeatureReport(reportId);
+  return parseRazerResponse(new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength));
 }
 
 interface SendCandidate {

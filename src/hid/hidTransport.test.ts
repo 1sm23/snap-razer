@@ -179,6 +179,40 @@ describe("HidTransport", () => {
     ]);
   });
 
+  it("polls again when the Razer response is still busy", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
+    const device = makeDevice(
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeOffsetRazerResponse({
+            commandClass: 0x07,
+            commandId: 0x80,
+            status: 0x01,
+            value: 0x00
+          })
+        )
+        .mockResolvedValueOnce(makeOffsetResponse())
+    );
+    const transport = await connectTransport(device);
+
+    const responsePromise = transport.command(makeRequest());
+    await vi.advanceTimersByTimeAsync(150);
+    const response = await responsePromise;
+
+    expect(device.receiveFeatureReport).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(0x02);
+    expect(response.success).toBe(true);
+    expect(transport.snapshot().logs[0]).toMatchObject({
+      status: 0x02,
+      parsed: {
+        value: 0x80,
+        success: true
+      }
+    });
+  });
+
   it("can send background commands without recording debug logs", async () => {
     vi.useFakeTimers();
     const device = makeDevice(async () => makeOffsetResponse());

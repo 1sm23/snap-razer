@@ -9,7 +9,7 @@ export const BATTERY_COMMAND_ID = 0x80;
 export const CHARGING_COMMAND_ID = 0x84;
 export const RAZER_STATUS_SUCCESS = 0x02;
 export const RAZER_STATUS_NOT_SUPPORTED = 0x05;
-const RAZER_STATUS_BUSY = 0x01;
+export const RAZER_STATUS_BUSY = 0x01;
 export const RAZER_PAYLOAD_MAX_LENGTH = 80;
 
 export interface BuildRazerReportOptions {
