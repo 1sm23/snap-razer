@@ -16,11 +16,12 @@ describe("DebugLog", () => {
   ];
 
   it("renders the log count and HID traffic inside a debug card", () => {
-    const html = renderToStaticMarkup(<DebugLog logs={logs} open onOpenChange={() => undefined} />);
+    const html = renderToStaticMarkup(<DebugLog logs={logs} open onClear={() => undefined} onOpenChange={() => undefined} />);
 
     expect(html).toContain("debugPanel");
     expect(html).toContain("Debug Log (1)");
     expect(html).toContain("Read DPI");
+    expect(html).toContain("aria-label=\"Clear history\"");
     expect(html).toContain("Copy all logs");
   });
 

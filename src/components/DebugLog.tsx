@@ -1,5 +1,6 @@
 import bugIcon from "@iconify-icons/lucide/bug";
 import copyIcon from "@iconify-icons/lucide/copy";
+import trash2Icon from "@iconify-icons/lucide/trash-2";
 import xIcon from "@iconify-icons/lucide/x";
 import { Icon } from "@iconify/react";
 import type { HidLogEntry } from "../domain/types";
@@ -11,6 +12,7 @@ import { toast } from "./ui/use-toast";
 interface DebugLogProps {
   logs: HidLogEntry[];
   open: boolean;
+  onClear: () => void;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -56,7 +58,7 @@ export function formatDebugLogs(logs: HidLogEntry[], label: (key: MessageKey) =>
     .join("\n\n");
 }
 
-export function DebugLog({ logs, open, onOpenChange }: DebugLogProps) {
+export function DebugLog({ logs, open, onClear, onOpenChange }: DebugLogProps) {
   const { t } = useI18n();
   const copyLogs = async () => {
     if (logs.length === 0 || !navigator.clipboard) {
@@ -83,6 +85,17 @@ export function DebugLog({ logs, open, onOpenChange }: DebugLogProps) {
           <CardHeader className="debugPanelHeader">
             <CardTitle>{t("debug.title", { count: logs.length })}</CardTitle>
             <div className="debugPanelActions">
+              <Button
+                aria-label={t("debug.clear")}
+                disabled={logs.length === 0}
+                size="icon"
+                title={t("debug.clear")}
+                type="button"
+                variant="ghost"
+                onClick={onClear}
+              >
+                <Icon aria-hidden="true" height={18} icon={trash2Icon} width={18} />
+              </Button>
               <Button
                 aria-label={t("debug.copy")}
                 disabled={logs.length === 0}

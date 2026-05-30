@@ -60,6 +60,10 @@ export class HidTransport {
 
   clear(): void {
     this.device = null;
+    this.clearLogs();
+  }
+
+  clearLogs(): void {
     this.logs = [];
   }
 

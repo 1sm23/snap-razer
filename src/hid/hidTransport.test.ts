@@ -535,6 +535,24 @@ describe("HidTransport", () => {
     });
   });
 
+  it("clears logs without disconnecting the selected device", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
+    const device = makeDevice(async () => makeOffsetResponse());
+    const transport = await connectTransport(device);
+
+    await runCommand(transport);
+    transport.clearLogs();
+
+    expect(transport.snapshot()).toMatchObject({
+      device: {
+        opened: true,
+        productName: "Razer Test Device"
+      },
+      logs: []
+    });
+  });
+
   it("closes the selected device when disconnecting", async () => {
     const device = makeDevice(async () => makeOffsetResponse());
     const transport = await connectTransport(device);

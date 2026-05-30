@@ -567,6 +567,11 @@ export default function App() {
     setDebugPanelOpen(false);
   }
 
+  function handleClearLogs() {
+    transport.clearLogs();
+    setLogs([]);
+  }
+
   async function handleInstallApp() {
     if (!installPrompt) {
       toast({
@@ -669,7 +674,7 @@ export default function App() {
         />
       </section>
       {debugEnabled ? (
-        <DebugLog logs={logs} open={debugPanelOpen} onOpenChange={setDebugPanelOpen} />
+        <DebugLog logs={logs} open={debugPanelOpen} onClear={handleClearLogs} onOpenChange={setDebugPanelOpen} />
       ) : null}
       <Analytics />
       <SpeedInsights />
