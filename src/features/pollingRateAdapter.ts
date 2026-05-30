@@ -13,6 +13,12 @@ const POLLING_GET_COMMAND_ID = 0x85;
 const POLLING_SET_COMMAND_ID = 0x05;
 const POLLING_GET_COMMAND_ID_2 = 0xc0;
 const POLLING_SET_COMMAND_ID_2 = 0x40;
+const RATE2_WRITE_SEQUENCES: readonly (readonly PollingRate2WriteStep[])[] = [
+  [{ argument: 0x00 }],
+  [{ argument: 0x00 }, { argument: 0x01 }],
+  [{ argument: 0x00 }, { argument: 0x01, transactionId: 0xff }],
+  [{ argument: 0x01 }, { argument: 0x00 }]
+];
 
 export const POLLING_RATE2_RATES = [125, 500, 1000, 2000, 4000, 8000] as const;
 export const LEGACY_POLLING_RATES = [125, 500, 1000] as const;
@@ -46,6 +52,11 @@ const legacyPollingRateToCode: Record<Extract<PollingRate, 125 | 500 | 1000>, nu
 const legacyCodeToPollingRate = new Map<number, PollingRate>(
   Object.entries(legacyPollingRateToCode).map(([rate, code]) => [code, Number(rate) as PollingRate])
 );
+
+interface PollingRate2WriteStep {
+  argument: number;
+  transactionId?: number;
+}
 
 export async function readPollingRate(command: TransportCommand): Promise<PollingRate> {
   const result = await readPollingRateProfile(command);
@@ -91,23 +102,25 @@ export async function setPollingRate(command: TransportCommand, pollingRate: num
   const pollingRate2Code = pollingRateToCode[pollingRate];
   const legacyCode = legacyPollingRateToCode[pollingRate as keyof typeof legacyPollingRateToCode];
   let shouldTryLegacy = false;
+  let lastReadback: PollingRate | null = null;
+  let lastReadbackError: unknown = null;
 
-  for (const argument of [0x00, 0x01]) {
-    const response = await command(
-      buildPollingRequest(
-        "Set polling rate",
-        POLLING_SET_COMMAND_ID_2,
-        0x02,
-        new Uint8Array([argument, pollingRate2Code])
-      )
-    );
-
-    if (response.status === RAZER_STATUS_NOT_SUPPORTED) {
+  for (const sequence of RATE2_WRITE_SEQUENCES) {
+    const writeResult = await writePollingRate2Sequence(command, pollingRate2Code, sequence);
+    if (writeResult === "notSupported") {
       shouldTryLegacy = true;
       break;
     }
 
-    assertPollingResponse(response, POLLING_SET_COMMAND_ID_2, "Set polling rate");
+    try {
+      const confirmedPollingRate = await readPollingRate(command);
+      lastReadback = confirmedPollingRate;
+      if (confirmedPollingRate === pollingRate) {
+        return pollingRate;
+      }
+    } catch (caught) {
+      lastReadbackError = caught;
+    }
   }
 
   if (shouldTryLegacy) {
@@ -119,12 +132,53 @@ export async function setPollingRate(command: TransportCommand, pollingRate: num
       buildPollingRequest("Set polling rate (legacy)", POLLING_SET_COMMAND_ID, 0x01, new Uint8Array([legacyCode]))
     );
     assertPollingResponse(response, POLLING_SET_COMMAND_ID, "Legacy set polling rate");
+    return pollingRate;
   }
 
-  return pollingRate;
+  if (lastReadback !== null) {
+    throw new Error(`Set polling rate was acknowledged, but device still reports ${lastReadback} Hz.`);
+  }
+
+  throw new Error(
+    `Set polling rate was acknowledged, but readback failed: ${
+      lastReadbackError instanceof Error ? lastReadbackError.message : String(lastReadbackError)
+    }`
+  );
 }
 
-function buildPollingRequest(commandName: string, commandId: number, dataSize: number, payload: Uint8Array): ProtocolRequest {
+async function writePollingRate2Sequence(
+  command: TransportCommand,
+  pollingRate2Code: number,
+  sequence: readonly PollingRate2WriteStep[]
+): Promise<"ok" | "notSupported"> {
+  for (const step of sequence) {
+    const response = await command(
+      buildPollingRequest(
+        "Set polling rate",
+        POLLING_SET_COMMAND_ID_2,
+        0x02,
+        new Uint8Array([step.argument, pollingRate2Code]),
+        step.transactionId
+      )
+    );
+
+    if (response.status === RAZER_STATUS_NOT_SUPPORTED) {
+      return "notSupported";
+    }
+
+    assertPollingResponse(response, POLLING_SET_COMMAND_ID_2, "Set polling rate");
+  }
+
+  return "ok";
+}
+
+function buildPollingRequest(
+  commandName: string,
+  commandId: number,
+  dataSize: number,
+  payload: Uint8Array,
+  transactionId?: number
+): ProtocolRequest {
   return {
     reportId: RAZER_REPORT_ID,
     commandName,
@@ -132,7 +186,7 @@ function buildPollingRequest(commandName: string, commandId: number, dataSize: n
       commandClass: POLLING_COMMAND_CLASS,
       commandId,
       dataSize,
-      transactionId: WORKING_TRANSACTION_ID,
+      transactionId: transactionId ?? WORKING_TRANSACTION_ID,
       payload
     })
   };
