@@ -159,10 +159,10 @@ export class HidTransport {
     const shouldLog = request.log !== false;
 
     try {
-      const sendAttempts = await sendFeatureReportWithFallback(this.device, request.reportId, request.bytes);
-      const response = await receiveRazerResponseAfterBusyPoll(
+      const { sendAttempts, response } = await sendFeatureReportAndReceiveWithFallback(
         this.device,
         request.reportId,
+        request.bytes,
         COMMAND_RESPONSE_INITIAL_DELAY_MS
       );
 
@@ -321,10 +321,10 @@ async function canUseControlProbe(device: HIDDevice): Promise<boolean> {
       await device.open();
     }
 
-    await sendFeatureReportWithFallback(device, RAZER_REPORT_ID, CONTROL_PROBE_REPORT);
-    const response = await receiveRazerResponseAfterBusyPoll(
+    const { response } = await sendFeatureReportAndReceiveWithFallback(
       device,
       RAZER_REPORT_ID,
+      CONTROL_PROBE_REPORT,
       CONTROL_PROBE_RESPONSE_INITIAL_DELAY_MS
     );
     usable =
@@ -353,17 +353,39 @@ function hasVendorDefinedCollection(device: HIDDevice): boolean {
   });
 }
 
-async function sendFeatureReportWithFallback(device: HIDDevice, reportId: number, bytes: Uint8Array): Promise<string[]> {
+async function sendFeatureReportAndReceiveWithFallback(
+  device: HIDDevice,
+  reportId: number,
+  bytes: Uint8Array,
+  responseDelayMs: number
+): Promise<{ sendAttempts: string[]; response: ProtocolResponse }> {
   const candidates = buildSendCandidates(reportId, bytes);
   const attempts: string[] = [];
+  let latestResponse: ProtocolResponse | null = null;
 
-  for (const candidate of candidates) {
+  for (const [index, candidate] of candidates.entries()) {
     try {
       await device.sendFeatureReport(reportId, bytesToArrayBuffer(candidate.bytes));
-      return [...attempts, `${formatSendAttempt(candidate)} ok`];
+      const response = await receiveRazerResponseAfterBusyPoll(device, reportId, responseDelayMs);
+      latestResponse = response;
+
+      if (matchesRequestCommand(bytes, response)) {
+        return { sendAttempts: [...attempts, `${formatSendAttempt(candidate)} ok`], response };
+      }
+
+      const attempt = `${formatSendAttempt(candidate)} ok, mismatched response ${formatCommandPair(response)}`;
+      if (index === candidates.length - 1) {
+        return { sendAttempts: [...attempts, attempt], response };
+      }
+
+      attempts.push(attempt);
     } catch (error) {
       attempts.push(`${formatSendAttempt(candidate)} failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  if (latestResponse) {
+    return { sendAttempts: attempts, response: latestResponse };
   }
 
   throw new Error(attempts.join(" | "));
@@ -409,6 +431,14 @@ function buildSendCandidates(reportId: number, bytes: Uint8Array): SendCandidate
 
 function formatSendAttempt(candidate: SendCandidate): string {
   return `${candidate.label}: ${candidate.bytes.byteLength} bytes`;
+}
+
+function matchesRequestCommand(requestBytes: Uint8Array, response: ProtocolResponse): boolean {
+  return response.commandClass === requestBytes[6] && response.commandId === requestBytes[7];
+}
+
+function formatCommandPair(response: ProtocolResponse): string {
+  return `0x${response.commandClass.toString(16)}/0x${response.commandId.toString(16)}`;
 }
 
 function describeReports(device: HIDDevice): string {

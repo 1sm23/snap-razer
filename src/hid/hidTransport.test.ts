@@ -179,6 +179,39 @@ describe("HidTransport", () => {
     ]);
   });
 
+  it("retries the leading report byte form when a report-zero write returns a mismatched response", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
+    const device = makeDevice(
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          makeOffsetRazerResponse({
+            commandClass: 0x07,
+            commandId: 0x84,
+            status: 0x02,
+            value: 0x00
+          })
+        )
+        .mockResolvedValueOnce(makeOffsetResponse())
+    );
+    const transport = await connectTransport(device);
+
+    const responsePromise = transport.command(makeRequest());
+    await vi.advanceTimersByTimeAsync(200);
+    const response = await responsePromise;
+
+    expect(response.commandClass).toBe(0x07);
+    expect(response.commandId).toBe(0x80);
+    expect(device.sendFeatureReport).toHaveBeenCalledTimes(2);
+    expect(new Uint8Array(vi.mocked(device.sendFeatureReport).mock.calls[0][1] as ArrayBuffer)).toHaveLength(89);
+    expect(new Uint8Array(vi.mocked(device.sendFeatureReport).mock.calls[1][1] as ArrayBuffer)).toHaveLength(90);
+    expect(transport.snapshot().logs[0].sendAttempts).toEqual([
+      "without leading report byte: 89 bytes ok, mismatched response 0x7/0x84",
+      "with leading report byte: 90 bytes ok"
+    ]);
+  });
+
   it("polls again when the Razer response is still busy", async () => {
     vi.useFakeTimers();
     vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001");
