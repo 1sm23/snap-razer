@@ -1,4 +1,5 @@
 import { Icon } from "@iconify/react";
+import batteryIcon from "@iconify-icons/lucide/battery";
 import chevronDownIcon from "@iconify-icons/lucide/chevron-down";
 import chevronRightIcon from "@iconify-icons/lucide/chevron-right";
 import downloadIcon from "@iconify-icons/lucide/download";
@@ -11,6 +12,7 @@ import sunIcon from "@iconify-icons/lucide/sun";
 import sunMoonIcon from "@iconify-icons/lucide/sun-moon";
 import githubIcon from "@iconify-icons/simple-icons/github";
 import type { ConnectedDevice } from "../domain/types";
+import type { BatteryResult } from "../features/batteryAdapter";
 import { useI18n, type SupportedLanguage } from "../i18n";
 import type { ResolvedThemeMode, ThemeMode } from "../theme";
 import { Button } from "./ui/button";
@@ -29,6 +31,7 @@ import { Switch } from "./ui/switch";
 
 interface HeaderProps {
   device: ConnectedDevice | null;
+  battery: BatteryResult | null;
   hidSupported: boolean;
   connecting: boolean;
   error: string | null;
@@ -46,6 +49,7 @@ interface HeaderProps {
 
 export function Header({
   device,
+  battery,
   hidSupported,
   connecting,
   error,
@@ -247,7 +251,15 @@ export function Header({
           )}
         </div>
         <div className="deviceMeta">
-          <span>{device?.productName ?? t("connection.noDevice")}</span>
+          <span className="deviceNameLine">
+            <span className="deviceName">{device?.productName ?? t("connection.noDevice")}</span>
+            {device && battery ? (
+              <span className="deviceBattery" title={`${t("power.battery")} ${battery.percent}%`}>
+                <Icon aria-hidden="true" className="deviceBatteryIcon" height={18} icon={batteryIcon} width={18} />
+                {battery.percent}%
+              </span>
+            ) : null}
+          </span>
           {device ? (
             <small>
               VID 0x{device.vendorId.toString(16)} / PID 0x{device.productId.toString(16)} /{" "}

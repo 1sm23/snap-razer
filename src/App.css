@@ -324,6 +324,40 @@ h2 {
   width: min(100%, 360px);
 }
 
+.deviceNameLine {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.deviceName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deviceBattery {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent-soft) 22%, var(--panel-subtle));
+  border: 1px solid color-mix(in srgb, var(--accent-soft) 52%, var(--border));
+  border-radius: 999px;
+  color: var(--accent-soft);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 4px;
+  line-height: 1;
+  padding: 4px 7px;
+}
+
+.deviceBatteryIcon {
+  flex: 0 0 auto;
+  margin-left: -1px;
+}
+
 .connectionHelpMenu {
   max-width: 360px;
   width: min(360px, calc(100vw - 32px));

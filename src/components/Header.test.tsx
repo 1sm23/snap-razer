@@ -4,6 +4,7 @@ import type { ConnectedDevice } from "../domain/types";
 import { Header } from "./Header";
 
 const defaultProps = {
+  battery: null,
   hidSupported: true,
   connecting: false,
   error: null,
@@ -44,5 +45,15 @@ describe("Header", () => {
     expect(html).toContain("Connection actions");
     expect(html).not.toContain("Connection help");
     expect(html).toContain("connectionButtonGroupConnected");
+  });
+
+  it("shows battery next to the connected device name", () => {
+    const html = renderToStaticMarkup(
+      <Header {...defaultProps} battery={{ rawBattery: 204, percent: 80 }} device={connectedDevice} />
+    );
+
+    expect(html).toContain("Razer Test Mouse");
+    expect(html).toContain("deviceBattery");
+    expect(html).toContain("80%");
   });
 });

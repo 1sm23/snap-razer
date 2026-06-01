@@ -626,6 +626,7 @@ export default function App() {
   return (
     <main className="appShell">
       <Header
+        battery={battery}
         device={device}
         hidSupported={hidSupported}
         connecting={connecting}
