@@ -56,4 +56,16 @@ describe("Header", () => {
     expect(html).toContain("deviceBattery");
     expect(html).toContain("80%");
   });
+
+  it("announces connection and error state changes", () => {
+    const html = renderToStaticMarkup(
+      <Header {...defaultProps} device={connectedDevice} error="Probe failed" />
+    );
+
+    expect(html).toContain("role=\"status\"");
+    expect(html).toContain("aria-live=\"polite\"");
+    expect(html).toContain("Razer Test Mouse connected");
+    expect(html).toContain("role=\"alert\"");
+    expect(html).toContain("Probe failed");
+  });
 });

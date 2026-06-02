@@ -251,6 +251,11 @@ export function Header({
           )}
         </div>
         <div className="deviceMeta">
+          <span className="srOnly" role="status" aria-live="polite">
+            {device
+              ? t("connection.connectedStatus", { device: device.productName })
+              : t("connection.disconnectedStatus")}
+          </span>
           <span className="deviceNameLine">
             <span className="deviceName">{device?.productName ?? t("connection.noDevice")}</span>
             {device && battery ? (
@@ -270,7 +275,7 @@ export function Header({
                   : t("connection.inputOnlyInterface")}
             </small>
           ) : null}
-          {error ? <small className="errorText">{error}</small> : null}
+          {error ? <small className="errorText" role="alert">{error}</small> : null}
         </div>
       </div>
     </header>

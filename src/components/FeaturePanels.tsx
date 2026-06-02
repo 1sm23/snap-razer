@@ -571,6 +571,7 @@ function DynamicSensitivityPanel({
 }
 
 function DynamicSensitivityCurve({ values }: { values: readonly DynamicSensitivityCurvePoint[] }) {
+  const { t } = useI18n();
   const svgPoints = values
     .map((point) => {
       const x = (clampNumber(point.x, 0, DYNAMIC_CURVE_X_MAX) / DYNAMIC_CURVE_X_MAX) * 100;
@@ -582,8 +583,8 @@ function DynamicSensitivityCurve({ values }: { values: readonly DynamicSensitivi
   const areaPoints = `0,100 ${svgPoints} 100,100`;
 
   return (
-    <div className="dynamicCurve" aria-hidden="true">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+    <div className="dynamicCurve" role="img" aria-label={t("advanced.dynamicSensitivity.curvePreview")}>
+      <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none">
         <polygon points={areaPoints} />
         <polyline points={svgPoints} />
       </svg>
@@ -662,7 +663,12 @@ function RotationPanel({
           t("advanced.probeFailed")
         )}
       </p>
-      <div className="rotationPreview" style={rotationStyle} aria-hidden="true">
+      <div
+        className="rotationPreview"
+        style={rotationStyle}
+        role="img"
+        aria-label={t("advanced.rotationPreview", { angle: draftAngle })}
+      >
         <div className="rotationAxis rotationAxisHorizontal" />
         <div className="rotationAxis rotationAxisVertical" />
         <img className="rotationMousePreview" src={rotationMouseIcon} alt="" />
@@ -934,6 +940,15 @@ function MouseTestPanel() {
     dotRefs.current = [];
   }
 
+  const statsLabel = t("mouseTest.statsLabel", {
+    rate: stats.rate === null ? t("mouseTest.waiting") : t("mouseTest.rateValue", { rate: stats.rate }),
+    peak: stats.peak === null ? "-- Hz" : `${stats.peak} Hz`,
+    jitter: stats.jitter === null ? "--%" : `${stats.jitter.toFixed(1)}%`,
+    interval: stats.intervalUs === null ? "-- us" : `${stats.intervalUs} us`,
+    speed: `${stats.speed} px/s`,
+    position: `${stats.x}, ${stats.y}`
+  });
+
   return (
     <ControlTile className="mouseTestPanel" eyebrow={t("mouseTest.title")}>
       <div className="mouseTestHeader">
@@ -967,7 +982,7 @@ function MouseTestPanel() {
       <div className="mouseTestChart">
         <canvas aria-label={t("mouseTest.chartLabel")} ref={canvasRef} />
       </div>
-      <div className="mouseTestStats">
+      <div className="mouseTestStats" role="status" aria-live="polite" aria-label={statsLabel}>
         <MouseTestStat label={t("mouseTest.peak")} unit="Hz" value={stats.peak ?? "--"} />
         <MouseTestStat label={t("mouseTest.jitter")} unit="%" value={stats.jitter === null ? "--" : stats.jitter.toFixed(1)} />
         <MouseTestStat label={t("mouseTest.interval")} unit="us" value={stats.intervalUs ?? "--"} />
@@ -1176,6 +1191,17 @@ function DpiStageRow({
   const focusActivationLockRef = useRef<number | null>(null);
   const stageSwatch = stageColorIndex === null ? null : DPI_STAGE_SWATCHES[stageColorIndex];
   const stageEnabled = isDpiStageEnabled(stage);
+  const stageValueLabel = formatDpiStageValue(stage, t);
+  const stageStateLabel = isActive ? t("performance.dpiStageActive") : t("performance.dpiStageInactive");
+  const stageGroupLabel = t("performance.dpiStageGroup", {
+    stage: stage.id,
+    state: stageStateLabel,
+    value: stageValueLabel
+  });
+  const stageActivateLabel = t("performance.activateDpiStage", {
+    stage: stage.id,
+    value: stageValueLabel
+  });
   const stageStyle = {
     "--dpi-stage-color": stageSwatch ?? "var(--field-border)"
   } as CSSProperties;
@@ -1251,7 +1277,7 @@ function DpiStageRow({
       <div className={splitAxes ? "axisDpiControl split" : "axisDpiControl"} key={axis}>
         {splitAxes ? <span className="axisLabel">{axisLabel}</span> : null}
         <Input
-          aria-label={axisLabel}
+          aria-label={t("performance.stageAxisNumber", { stage: stage.id, axis: axisLabel })}
           className="stageNumber"
           ref={inputRef}
           disabled={controlsDisabled}
@@ -1287,7 +1313,7 @@ function DpiStageRow({
           }}
         />
         <Slider
-          aria-label={axisLabel}
+          aria-label={t("performance.stageAxisSlider", { stage: stage.id, axis: axisLabel })}
           className="stageSlider"
           disabled={controlsDisabled}
           min={DPI_MIN}
@@ -1324,8 +1350,12 @@ function DpiStageRow({
     <div
       className={cn("dpiStageRow", isActive && "active", !stageEnabled && "disabled")}
       style={stageStyle}
+      role="group"
+      aria-label={stageGroupLabel}
     >
       <Button
+        aria-current={isActive ? "true" : undefined}
+        aria-label={stageActivateLabel}
         className="stageBadge"
         disabled={controlsDisabled}
         size="icon"
@@ -1414,6 +1444,15 @@ function clampNumber(value: number, min: number, max: number): number {
 
 function clampCurveValue(value: number): number {
   return Math.min(Math.max(value, DYNAMIC_CURVE_Y_MIN), DYNAMIC_CURVE_Y_MAX);
+}
+
+function formatDpiStageValue(
+  stage: DpiStage,
+  translate: (key: MessageKey, params?: Record<string, string | number | boolean | null | undefined>) => string
+): string {
+  return stage.x === stage.y
+    ? translate("performance.dpiStageValue", { value: stage.x })
+    : translate("performance.dpiStageSplitValue", { x: stage.x, y: stage.y });
 }
 
 function median(values: number[]): number {

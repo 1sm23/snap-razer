@@ -65,6 +65,44 @@ describe("FeaturePanels", () => {
     expect(html).not.toContain("disabled=\"\"");
   });
 
+  it("exposes DPI stage state and axis controls with descriptive accessible names", () => {
+    const html = renderToStaticMarkup(
+      <FeaturePanels
+        applyingDpi={false}
+        applyingPollingRate={false}
+        battery={null}
+        charging={null}
+        dpi={{ x: 1600, y: 1600 }}
+        dpiStages={{
+          activeStage: 2,
+          stages: [
+            { enabled: true, id: 1, x: 800, y: 800 },
+            { enabled: true, id: 2, x: 1600, y: 1600 }
+          ]
+        }}
+        dpiStagesDraft={{
+          activeStage: 2,
+          stages: [
+            { enabled: true, id: 1, x: 800, y: 800 },
+            { enabled: true, id: 2, x: 1600, y: 1600 }
+          ]
+        }}
+        onApplyDpiStages={vi.fn()}
+        onApplyPollingRate={vi.fn()}
+        onDpiStagesDraftChange={vi.fn()}
+        pollingRate={1000}
+        supportedPollingRates={[125, 500, 1000]}
+      />
+    );
+
+    expect(html).toContain("role=\"group\"");
+    expect(html).toContain("aria-label=\"DPI stage 2, active, 1600 DPI\"");
+    expect(html).toContain("aria-current=\"true\"");
+    expect(html).toContain("aria-label=\"Activate DPI stage 1, 800 DPI\"");
+    expect(html).toContain("aria-label=\"DPI stage 2 X axis DPI number\"");
+    expect(html).toContain("aria-label=\"DPI stage 2 X axis DPI slider\"");
+  });
+
   it("disables DPI and polling rate controls when probes did not confirm support", () => {
     const html = renderToStaticMarkup(
       <FeaturePanels
@@ -142,6 +180,56 @@ describe("FeaturePanels", () => {
     expect(html).toContain("Rotation");
     expect(html).toContain("-12°");
     expect(html).toContain("Rotation angle");
+  });
+
+  it("adds text alternatives for visual advanced controls", () => {
+    const html = renderToStaticMarkup(
+      <FeaturePanels
+        advancedSettings={{
+          dynamicSensitivity: { enabled: true, mode: "natural", profileId: 1 },
+          rotation: { angle: -12, enabled: true, profileId: 1 }
+        }}
+        applyingDpi={false}
+        applyingPollingRate={false}
+        battery={null}
+        charging={null}
+        dpi={null}
+        dpiStages={null}
+        dpiStagesDraft={{ activeStage: 1, stages: [{ id: 1, x: 800, y: 800 }] }}
+        initialTab="advanced"
+        onApplyDpiStages={vi.fn()}
+        onApplyPollingRate={vi.fn()}
+        onDpiStagesDraftChange={vi.fn()}
+        pollingRate={null}
+        supportedPollingRates={[]}
+      />
+    );
+
+    expect(html).toContain("Dynamic sensitivity curve preview");
+    expect(html).toContain("Rotation preview, current angle -12 degrees");
+  });
+
+  it("announces live mouse test stats and labels the polling chart", () => {
+    const html = renderToStaticMarkup(
+      <FeaturePanels
+        applyingDpi={false}
+        applyingPollingRate={false}
+        battery={null}
+        charging={null}
+        dpi={{ x: 800, y: 800 }}
+        dpiStages={{ activeStage: 1, stages: [{ id: 1, x: 800, y: 800 }] }}
+        dpiStagesDraft={{ activeStage: 1, stages: [{ id: 1, x: 800, y: 800 }] }}
+        onApplyDpiStages={vi.fn()}
+        onApplyPollingRate={vi.fn()}
+        onDpiStagesDraftChange={vi.fn()}
+        pollingRate={1000}
+        supportedPollingRates={[125, 500, 1000]}
+      />
+    );
+
+    expect(html).toContain("role=\"status\"");
+    expect(html).toContain("aria-live=\"polite\"");
+    expect(html).toContain("aria-label=\"Polling rate history chart\"");
   });
 
   it("renders dynamic sensitivity custom template choices", () => {
