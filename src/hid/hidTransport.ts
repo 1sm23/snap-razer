@@ -17,10 +17,6 @@ export interface HidTransportSnapshot {
   logs: HidLogEntry[];
 }
 
-export interface RequestAndOpenOptions {
-  forceSelection?: boolean;
-}
-
 const RAZER_REQUEST_FILTERS: HIDDeviceFilter[] = [{ vendorId: RAZER_VENDOR_ID }];
 const COMMAND_RESPONSE_INITIAL_DELAY_MS = 100;
 const CONTROL_PROBE_RESPONSE_INITIAL_DELAY_MS = 35;
@@ -93,31 +89,16 @@ export class HidTransport {
     return this.snapshot().device;
   }
 
-  async requestAndOpen(options: RequestAndOpenOptions = {}): Promise<ConnectedDevice | null> {
+  async requestAndOpen(): Promise<ConnectedDevice | null> {
     if (!navigator.hid) {
       throw new Error("WebHID is not available in this browser.");
     }
 
-    const alreadyAllowed = options.forceSelection ? [] : await navigator.hid.getDevices();
-    const alreadyAllowedRazerDevices = alreadyAllowed.filter((device) => device.vendorId === RAZER_VENDOR_ID);
-    const existingControlDevice = await chooseControlDeviceWithProbe(alreadyAllowedRazerDevices);
-
-    const selectedDevices =
-      existingControlDevice === null
-        ? await navigator.hid.requestDevice({
-            filters: RAZER_REQUEST_FILTERS
-          })
-        : [];
+    const selectedDevices = await navigator.hid.requestDevice({
+      filters: RAZER_REQUEST_FILTERS
+    });
     const selectedRazerDevices = selectedDevices.filter((device) => device.vendorId === RAZER_VENDOR_ID);
-    const selectedProductIds = new Set(selectedRazerDevices.map((device) => device.productId));
-    const allowedAfterRequest =
-      selectedRazerDevices.length > 0
-        ? (await navigator.hid.getDevices()).filter(
-            (device) => device.vendorId === RAZER_VENDOR_ID && selectedProductIds.has(device.productId)
-          )
-        : [];
-    const requestedDevice = await chooseBestDeviceWithProbe(uniqueDevices([...selectedRazerDevices, ...allowedAfterRequest]));
-    const device = existingControlDevice ?? requestedDevice;
+    const device = await chooseBestDeviceWithProbe(selectedRazerDevices);
 
     if (!device) {
       throw new Error("No Razer HID device was selected.");
@@ -228,7 +209,10 @@ function canTryReportZeroFeatureProbe(device: HIDDevice): boolean {
 function isKnownReportZeroFeatureDevice(device: HIDDevice): boolean {
   return (
     device.vendorId === RAZER_VENDOR_ID &&
-    (device.productId === 0x00b3 || device.productId === 0x00de || device.productId === 0x00df)
+    (device.productId === 0x00b3 ||
+      device.productId === 0x00c5 ||
+      device.productId === 0x00de ||
+      device.productId === 0x00df)
   );
 }
 
@@ -265,17 +249,6 @@ async function chooseBestDeviceWithProbe(devices: HIDDevice[]): Promise<HIDDevic
   }
 
   return chooseBestDevice(sortedDevices);
-}
-
-async function chooseControlDeviceWithProbe(devices: HIDDevice[]): Promise<HIDDevice | null> {
-  const sortedDevices = sortDevicesByControlScore(devices);
-  for (const candidate of sortedDevices) {
-    if (await canUseControlProbe(candidate)) {
-      return candidate;
-    }
-  }
-
-  return chooseControlDevice(sortedDevices);
 }
 
 function sortDevicesByControlScore(devices: HIDDevice[]): HIDDevice[] {
@@ -344,10 +317,6 @@ async function canUseControlProbe(device: HIDDevice): Promise<boolean> {
   }
 
   return usable;
-}
-
-function uniqueDevices(devices: HIDDevice[]): HIDDevice[] {
-  return devices.filter((device, index) => devices.indexOf(device) === index);
 }
 
 function hasVendorDefinedCollection(device: HIDDevice): boolean {

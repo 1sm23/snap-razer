@@ -303,7 +303,7 @@ describe("HidTransport", () => {
     expect(controlDevice.receiveFeatureReport).toHaveBeenCalledWith(RAZER_REPORT_ID);
   });
 
-  it("checks same-product authorized interfaces after the chooser returns an input path", async () => {
+  it("honors an input-only interface selected in the browser chooser", async () => {
     const inputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
       productId: 0x00de,
       productName: "Razer Mouse Input",
@@ -331,12 +331,13 @@ describe("HidTransport", () => {
     const transport = new HidTransport();
     await transport.requestAndOpen();
 
-    expect(transport.snapshot().device?.productName).toBe("Razer Control Interface");
-    expect(featureDevice.open).toHaveBeenCalledOnce();
+    expect(transport.snapshot().device?.productName).toBe("Razer Mouse Input");
+    expect(inputOnlyDevice.open).toHaveBeenCalledOnce();
+    expect(featureDevice.open).not.toHaveBeenCalled();
     expect(otherRazerDevice.open).not.toHaveBeenCalled();
   });
 
-  it("prefers an already-authorized control interface", async () => {
+  it("always opens the browser chooser instead of reusing an authorized control interface", async () => {
     const inputOnlyDevice = makeDevice(async () => makeOffsetResponse(), {
       productName: "Razer Mouse Input",
       collections: [{ usagePage: 0x01, usage: 0x02 }]
@@ -356,37 +357,10 @@ describe("HidTransport", () => {
     const transport = new HidTransport();
     await transport.requestAndOpen();
 
-    expect(transport.snapshot().device?.productName).toBe("Razer Control Interface");
-    expect(requestDevice).not.toHaveBeenCalled();
-    expect(inputOnlyDevice.open).not.toHaveBeenCalled();
-    expect(featureDevice.open).toHaveBeenCalledOnce();
-  });
-
-  it("forces a new chooser selection after a manual disconnect", async () => {
-    const alreadyAllowedDevice = makeDevice(async () => makeOffsetResponse(), {
-      productId: 0x00de,
-      productName: "Already Allowed Razer Control Interface"
-    });
-    const selectedDevice = makeDevice(async () => makeOffsetResponse(), {
-      productId: 0x00df,
-      productName: "Selected Razer Control Interface"
-    });
-    const requestDevice = vi.fn(async () => [selectedDevice]);
-
-    vi.stubGlobal("navigator", {
-      hid: {
-        getDevices: vi.fn(async () => [alreadyAllowedDevice]),
-        requestDevice
-      }
-    });
-
-    const transport = new HidTransport();
-    await transport.requestAndOpen({ forceSelection: true });
-
-    expect(transport.snapshot().device?.productName).toBe("Selected Razer Control Interface");
+    expect(transport.snapshot().device?.productName).toBe("Razer Mouse Input");
     expect(requestDevice).toHaveBeenCalledOnce();
-    expect(alreadyAllowedDevice.open).not.toHaveBeenCalled();
-    expect(selectedDevice.open).toHaveBeenCalledOnce();
+    expect(inputOnlyDevice.open).toHaveBeenCalledOnce();
+    expect(featureDevice.open).not.toHaveBeenCalled();
   });
 
   it("does not reuse an already-authorized input-only interface when requesting a control path", async () => {
@@ -479,6 +453,7 @@ describe("HidTransport", () => {
 
   it.each([
     [0x00b3, "Razer HyperPolling Wireless Dongle"],
+    [0x00c5, "Razer DeathAdder V3 HyperSpeed"],
     [0x00df, "Razer Viper V3 Pro SE"]
   ])("allows report-zero feature probes for known generic mouse interfaces %#", async (productId, productName) => {
     vi.useFakeTimers();

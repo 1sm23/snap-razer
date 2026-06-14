@@ -261,7 +261,7 @@ export default function App() {
     };
   }, [device, transport]);
 
-  const connect = useCallback(async (mode: "authorized" | "request", options: { forceSelection?: boolean } = {}): Promise<boolean> => {
+  const connect = useCallback(async (mode: "authorized" | "request"): Promise<boolean> => {
     const hasCurrentDevice = currentDeviceRef.current !== null;
 
     setConnecting(true);
@@ -269,7 +269,7 @@ export default function App() {
 
     try {
       const connected =
-        mode === "authorized" ? await transport.openAuthorized() : await transport.requestAndOpen(options);
+        mode === "authorized" ? await transport.openAuthorized() : await transport.requestAndOpen();
 
       if (!connected) {
         if (!hasCurrentDevice) {
@@ -337,7 +337,7 @@ export default function App() {
   }, [connect, hidSupported]);
 
   async function handleConnect() {
-    const connected = await connect("request", { forceSelection: readAutoConnectBlocked() });
+    const connected = await connect("request");
     if (connected) {
       storeAutoConnectBlocked(false);
     }
