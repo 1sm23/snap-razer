@@ -91,7 +91,11 @@ export function markWritableInterfaceUnavailable(map: CapabilityMap, detail: str
       state: "browserLimited",
       detail
     },
-    buttons: map.buttons
+    buttons: {
+      ...map.buttons,
+      state: "browserLimited",
+      detail
+    }
   };
 }
 

@@ -3,6 +3,7 @@ import { readDpi, readDpiStages, type DpiStages, type DpiValue } from "../featur
 import { readPollingRateProfile, type PollingRate } from "../features/pollingRateAdapter";
 import { readIdleTime, readLowBatteryThreshold, type IdleTimeResult, type LowBatteryThresholdResult } from "../features/powerAdapter";
 import { readAdvancedSettings, type AdvancedSettings } from "../features/advancedAdapter";
+import { readButtonMappings, type ButtonMapping, type ButtonProtocol } from "../features/buttonAdapter";
 import type { TransportCommand } from "../hid/hidTransport";
 import { updateCapability } from "./capabilities";
 import type { CapabilityMap } from "./types";
@@ -18,11 +19,14 @@ export interface CapabilityProbeResult {
   idleTime: IdleTimeResult | null;
   lowBatteryThreshold: LowBatteryThresholdResult | null;
   advancedSettings: AdvancedSettings | null;
+  buttonMappings: ButtonMapping[] | null;
+  buttonProtocol: ButtonProtocol;
 }
 
 export async function runCapabilityProbe(
   initialCapabilities: CapabilityMap,
-  command: TransportCommand
+  command: TransportCommand,
+  buttonProtocol: ButtonProtocol = "official-obm"
 ): Promise<CapabilityProbeResult> {
   let capabilities = initialCapabilities;
   let battery: BatteryResult | null = null;
@@ -34,6 +38,7 @@ export async function runCapabilityProbe(
   let idleTime: IdleTimeResult | null = null;
   let lowBatteryThreshold: LowBatteryThresholdResult | null = null;
   let advancedSettings: AdvancedSettings | null = null;
+  let buttonMappings: ButtonMapping[] | null = null;
 
   try {
     battery = await readBattery(command);
@@ -112,8 +117,23 @@ export async function runCapabilityProbe(
     advancedSettings = null;
   }
 
+  try {
+    buttonMappings = await readButtonMappings(command, buttonProtocol);
+    capabilities = updateCapability(capabilities, "buttons", {
+      state: "available",
+      detail: { key: "capability.detail.buttons.available" }
+    });
+  } catch (error) {
+    capabilities = updateCapability(capabilities, "buttons", {
+      state: "probeFailed",
+      detail: error instanceof Error ? error.message : String(error)
+    });
+  }
+
   return {
     advancedSettings,
+    buttonMappings,
+    buttonProtocol,
     capabilities,
     battery,
     charging,

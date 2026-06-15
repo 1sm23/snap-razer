@@ -70,7 +70,7 @@ describe("capabilityProbe", () => {
     expect(result.supportedPollingRates).toEqual([125, 500, 1000, 2000, 4000, 8000]);
   });
 
-  it("isolates failed battery probe from successful charging probe and static browser-limited button state", async () => {
+  it("isolates failed battery probe from successful charging and button probes", async () => {
     const command: TransportCommand = async (request) => {
       if (request.bytes[7] === 0x80) {
         throw new Error("battery timeout");
@@ -91,12 +91,12 @@ describe("capabilityProbe", () => {
 
     expect(result.capabilities.battery.state).toBe("probeFailed");
     expect(result.capabilities.charging.state).toBe("available");
-    expect(result.capabilities.buttons.state).toBe("browserLimited");
+    expect(result.capabilities.buttons.state).toBe("available");
     expect(result.battery).toBeNull();
     expect(result.charging?.isCharging).toBe(false);
   });
 
-  it("isolates failed charging probe from successful battery probe and static browser-limited button state", async () => {
+  it("isolates failed charging probe from successful battery and button probes", async () => {
     const command: TransportCommand = async (request) => {
       if (request.bytes[7] === 0x84) {
         throw new Error("charging timeout");
@@ -117,7 +117,7 @@ describe("capabilityProbe", () => {
 
     expect(result.capabilities.battery.state).toBe("available");
     expect(result.capabilities.charging.state).toBe("probeFailed");
-    expect(result.capabilities.buttons.state).toBe("browserLimited");
+    expect(result.capabilities.buttons.state).toBe("available");
     expect(result.battery?.percent).toBe(100);
     expect(result.charging).toBeNull();
   });
@@ -138,7 +138,7 @@ describe("capabilityProbe", () => {
     expect(result.capabilities.battery.state).toBe("probeFailed");
     expect(result.capabilities.battery.detail).toContain("Battery command response mismatch");
     expect(result.capabilities.charging.state).toBe("available");
-    expect(result.capabilities.buttons.state).toBe("browserLimited");
+    expect(result.capabilities.buttons.state).toBe("available");
     expect(result.battery).toBeNull();
     expect(result.charging?.isCharging).toBe(true);
   });

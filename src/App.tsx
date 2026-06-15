@@ -19,10 +19,13 @@ import type { CapabilityMap, ConnectedDevice, HidLogEntry, LocalizedMessage } fr
 import type { BatteryResult, ChargingResult } from "./features/batteryAdapter";
 import {
   createDefaultButtonMappings,
+  getButtonProtocol,
+  writeButtonMappings,
   sanitizeButtonMappings,
   updateButtonMapping,
   updateButtonMappingCustomKeys,
-  type ButtonMapping
+  type ButtonMapping,
+  type ButtonProtocol
 } from "./features/buttonAdapter";
 import { readDpiStages, writeDpiStages, type DpiStages, type DpiValue } from "./features/dpiAdapter";
 import { setPollingRate, type PollingRate } from "./features/pollingRateAdapter";
@@ -88,6 +91,7 @@ export default function App() {
   const [lowBatteryThreshold, setLowBatteryThresholdValue] = useState<LowBatteryThresholdResult | null>(null);
   const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings | null>(null);
   const [buttonMappings, setButtonMappings] = useState<ButtonMapping[]>(() => readStoredButtonMappings());
+  const [buttonProtocol, setButtonProtocol] = useState<ButtonProtocol>("official-obm");
   const [logs, setLogs] = useState<HidLogEntry[]>([]);
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
@@ -100,6 +104,7 @@ export default function App() {
   const [applyingLowBatteryThreshold, setApplyingLowBatteryThreshold] = useState(false);
   const [applyingDynamicSensitivity, setApplyingDynamicSensitivity] = useState(false);
   const [applyingRotation, setApplyingRotation] = useState(false);
+  const [applyingButtons, setApplyingButtons] = useState(false);
   const [error, setError] = useState<string | LocalizedMessage | null>(null);
   const autoConnectAttemptedRef = useRef(false);
   const currentDeviceRef = useRef<ConnectedDevice | null>(null);
@@ -158,7 +163,8 @@ export default function App() {
       applyingIdleTime ||
       applyingLowBatteryThreshold ||
       applyingDynamicSensitivity ||
-      applyingRotation;
+      applyingRotation ||
+      applyingButtons;
   }, [
     applyingDpi,
     applyingDynamicSensitivity,
@@ -166,6 +172,7 @@ export default function App() {
     applyingLowBatteryThreshold,
     applyingPollingRate,
     applyingRotation,
+    applyingButtons,
     connecting
   ]);
 
@@ -296,7 +303,9 @@ export default function App() {
         return true;
       }
 
-      const probeResult = await runCapabilityProbe(initialCapabilities, transport.command);
+      const connectedButtonProtocol = getButtonProtocol(connected.productId);
+      const probeResult = await runCapabilityProbe(initialCapabilities, transport.command, connectedButtonProtocol);
+      setButtonProtocol(connectedButtonProtocol);
       setCapabilities(probeResult.capabilities);
       if (didAllActiveProbesFail(probeResult.capabilities)) {
         setError({ key: "error.allActiveProbesFailed" });
@@ -314,6 +323,10 @@ export default function App() {
       setIdleTimeValue(probeResult.idleTime);
       setLowBatteryThresholdValue(probeResult.lowBatteryThreshold);
       setAdvancedSettings(probeResult.advancedSettings);
+      if (probeResult.buttonMappings) {
+        setButtonMappings(probeResult.buttonMappings);
+        storeButtonMappings(probeResult.buttonMappings);
+      }
       setLogs(transport.snapshot().logs);
       return true;
     } catch (caught) {
@@ -375,6 +388,7 @@ export default function App() {
     setIdleTimeValue(null);
     setLowBatteryThresholdValue(null);
     setAdvancedSettings(null);
+    setButtonProtocol("official-obm");
     setCapabilities(initialCapabilities);
   }
 
@@ -562,6 +576,29 @@ export default function App() {
     }
   }
 
+  async function handleApplyButtonMappings() {
+    setApplyingButtons(true);
+    setError(null);
+
+    try {
+      const appliedMappings = await writeButtonMappings(transport.command, buttonMappings, buttonProtocol);
+      setButtonMappings(appliedMappings);
+      storeButtonMappings(appliedMappings);
+      setLogs(transport.snapshot().logs);
+      toast({
+        description: t("buttonMap.appliedDescription"),
+        title: t("buttonMap.applied")
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+      setLogs(transport.snapshot().logs);
+      setDebugEnabled(true);
+      setDebugPanelOpen(true);
+    } finally {
+      setApplyingButtons(false);
+    }
+  }
+
   function handleDebugEnabledChange(enabled: boolean) {
     setDebugEnabled(enabled);
     setDebugPanelOpen(false);
@@ -652,6 +689,7 @@ export default function App() {
           applyingLowBatteryThreshold={applyingLowBatteryThreshold}
           applyingPollingRate={applyingPollingRate}
           applyingRotation={applyingRotation}
+          applyingButtons={applyingButtons}
           battery={battery}
           buttonMappings={buttonMappings}
           charging={charging}
@@ -666,11 +704,13 @@ export default function App() {
           onApplyLowBatteryThreshold={handleApplyLowBatteryThreshold}
           onApplyPollingRate={handleApplyPollingRate}
           onApplyRotation={handleApplyRotation}
+          onApplyButtonMappings={handleApplyButtonMappings}
           onButtonMappingChange={handleButtonMappingChange}
           onButtonMappingCustomKeysChange={handleButtonMappingCustomKeysChange}
           onDpiStagesDraftChange={setDpiStagesDraft}
           onResetButtonMappings={handleResetButtonMappings}
           pollingRate={pollingRate}
+          buttonsAvailable={capabilities.buttons.state === "available"}
           supportedPollingRates={supportedPollingRates}
         />
       </section>

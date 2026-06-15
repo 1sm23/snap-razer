@@ -137,11 +137,13 @@ interface FeaturePanelsProps {
   pollingRate: PollingRate | null;
   supportedPollingRates: readonly PollingRate[];
   applyingDpi: boolean;
+  applyingButtons?: boolean;
   applyingDynamicSensitivity?: boolean;
   applyingIdleTime?: boolean;
   applyingLowBatteryThreshold?: boolean;
   applyingPollingRate: boolean;
   applyingRotation?: boolean;
+  buttonsAvailable?: boolean;
   initialTab?: ControlTab;
   idleTime?: IdleTimeResult | null;
   lowBatteryThreshold?: LowBatteryThresholdResult | null;
@@ -152,6 +154,7 @@ interface FeaturePanelsProps {
   onApplyLowBatteryThreshold?: (percent: number) => void;
   onApplyPollingRate: (pollingRate: PollingRate) => void;
   onApplyRotation?: (settings: RotationSettings) => void;
+  onApplyButtonMappings?: () => void;
   onButtonMappingChange?: (buttonId: string, action: ButtonMapping["action"]) => void;
   onButtonMappingCustomKeysChange?: (buttonId: string, customKeys: string) => void;
   onResetButtonMappings?: () => void;
@@ -168,11 +171,13 @@ export function FeaturePanels({
   pollingRate,
   supportedPollingRates,
   applyingDpi,
+  applyingButtons = false,
   applyingDynamicSensitivity = false,
   applyingIdleTime = false,
   applyingLowBatteryThreshold = false,
   applyingPollingRate,
   applyingRotation = false,
+  buttonsAvailable = false,
   initialTab = "performance",
   idleTime = null,
   lowBatteryThreshold = null,
@@ -183,6 +188,7 @@ export function FeaturePanels({
   onApplyLowBatteryThreshold = () => undefined,
   onApplyPollingRate,
   onApplyRotation = () => undefined,
+  onApplyButtonMappings = () => undefined,
   onButtonMappingChange = () => undefined,
   onButtonMappingCustomKeysChange = () => undefined,
   onResetButtonMappings = () => undefined
@@ -292,7 +298,9 @@ export function FeaturePanels({
                 <div>
                   <div className="buttonMappingTitleLine">
                     <strong>{t("buttonMap.title")}</strong>
-                    <span className="buttonMappingMode">{t("buttonMap.localDraft")}</span>
+                    <span className="buttonMappingMode">
+                      {buttonsAvailable ? t("buttonMap.deviceProfile") : t("buttonMap.localDraft")}
+                    </span>
                   </div>
                   <p>{t("buttonMap.description")}</p>
                 </div>
@@ -300,12 +308,18 @@ export function FeaturePanels({
                   <Button type="button" variant="outline" onClick={onResetButtonMappings}>
                     {t("buttonMap.reset")}
                   </Button>
-                  <Button disabled type="button">
-                    {t("buttonMap.applyUnavailable")}
+                  <Button disabled={!buttonsAvailable || applyingButtons} type="button" onClick={onApplyButtonMappings}>
+                    {applyingButtons
+                      ? t("buttonMap.applying")
+                      : buttonsAvailable
+                        ? t("buttonMap.apply")
+                        : t("buttonMap.applyUnavailable")}
                   </Button>
                 </div>
               </div>
-              <div className="buttonMappingNotice">{t("buttonMap.firmwareNotice")}</div>
+              <div className="buttonMappingNotice">
+                {t(buttonsAvailable ? "buttonMap.deviceNotice" : "buttonMap.firmwareNotice")}
+              </div>
               <div className="buttonMappingList">
                 {BUTTON_DEFINITIONS.map((definition) => {
                   const mapping =
