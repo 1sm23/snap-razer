@@ -1,4 +1,5 @@
 import { Icon } from "@iconify/react";
+import batteryChargingIcon from "@iconify-icons/lucide/battery-charging";
 import batteryIcon from "@iconify-icons/lucide/battery";
 import chevronDownIcon from "@iconify-icons/lucide/chevron-down";
 import chevronRightIcon from "@iconify-icons/lucide/chevron-right";
@@ -12,7 +13,7 @@ import sunIcon from "@iconify-icons/lucide/sun";
 import sunMoonIcon from "@iconify-icons/lucide/sun-moon";
 import githubIcon from "@iconify-icons/simple-icons/github";
 import type { ConnectedDevice } from "../domain/types";
-import type { BatteryResult } from "../features/batteryAdapter";
+import type { BatteryResult, ChargingResult } from "../features/batteryAdapter";
 import { useI18n, type SupportedLanguage } from "../i18n";
 import type { ResolvedThemeMode, ThemeMode } from "../theme";
 import { Button } from "./ui/button";
@@ -32,6 +33,7 @@ import { Switch } from "./ui/switch";
 interface HeaderProps {
   device: ConnectedDevice | null;
   battery: BatteryResult | null;
+  charging: ChargingResult | null;
   hidSupported: boolean;
   connecting: boolean;
   error: string | null;
@@ -50,6 +52,7 @@ interface HeaderProps {
 export function Header({
   device,
   battery,
+  charging,
   hidSupported,
   connecting,
   error,
@@ -67,6 +70,13 @@ export function Header({
   const githubUrl = "https://github.com/1sm23/snap-razer";
   const { availableLanguages, language, setLanguage, t } = useI18n();
   const nextTheme = resolvedThemeMode === "dark" ? "light" : "dark";
+  const isCharging = charging?.isCharging === true;
+  const batteryTitle =
+    battery && isCharging
+      ? `${t("power.battery")} ${battery.percent}% · ${t("power.isCharging")}`
+      : battery
+        ? `${t("power.battery")} ${battery.percent}%`
+        : "";
   const themeOptions: ThemeMode[] = ["light", "dark", "system"];
   const themeIcons = {
     light: sunIcon,
@@ -259,8 +269,14 @@ export function Header({
           <span className="deviceNameLine">
             <span className="deviceName">{device?.productName ?? t("connection.noDevice")}</span>
             {device && battery ? (
-              <span className="deviceBattery" title={`${t("power.battery")} ${battery.percent}%`}>
-                <Icon aria-hidden="true" className="deviceBatteryIcon" height={18} icon={batteryIcon} width={18} />
+              <span className="deviceBattery" title={batteryTitle}>
+                <Icon
+                  aria-hidden="true"
+                  className={isCharging ? "deviceBatteryIcon deviceBatteryIconCharging" : "deviceBatteryIcon"}
+                  height={18}
+                  icon={isCharging ? batteryChargingIcon : batteryIcon}
+                  width={18}
+                />
                 {battery.percent}%
               </span>
             ) : null}

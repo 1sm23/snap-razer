@@ -1,5 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  CHARGING_BATTERY_REFRESH_INTERVAL_MS,
   mergeDpiStagesWithDefaults,
   readAutoConnectBlocked,
   readStoredDpiStagesLayout,
@@ -7,9 +10,76 @@ import {
   storeDpiStagesLayout,
   syncActiveDpiStageFromHardware
 } from "./App";
+import App from "./App";
+import { createInitialCapabilities } from "./domain/capabilities";
+import { runCapabilityProbe } from "./domain/capabilityProbe";
+import type { ConnectedDevice, ProtocolRequest, ProtocolResponse } from "./domain/types";
+
+const commandMock = vi.fn<(request: ProtocolRequest) => Promise<ProtocolResponse>>();
+
+const connectedDevice: ConnectedDevice = {
+  productName: "Razer Charging Mouse",
+  vendorId: 0x1532,
+  productId: 0x00de,
+  opened: true,
+  writableReports: true,
+  featureReportProbeAllowed: true,
+  descriptorSummary: "feature report 0"
+};
+
+vi.mock("./hid/hidTransport", () => ({
+  HidTransport: vi.fn().mockImplementation(function HidTransport() {
+    return {
+      clear: vi.fn(),
+      clearLogs: vi.fn(),
+      command: commandMock,
+      disconnect: vi.fn(),
+      isSupported: () => true,
+      openAuthorized: vi.fn(async () => connectedDevice),
+      requestAndOpen: vi.fn(async () => connectedDevice),
+      snapshot: vi.fn(() => ({ device: connectedDevice, logs: [] }))
+    };
+  })
+}));
+
+vi.mock("./domain/capabilityProbe", () => ({
+  runCapabilityProbe: vi.fn(async (initialCapabilities) => ({
+    advancedSettings: null,
+    battery: { rawBattery: 204, percent: 80 },
+    buttonMappings: null,
+    buttonProtocol: "official-obm",
+    capabilities: initialCapabilities,
+    charging: { rawCharging: 1, isCharging: true },
+    dpi: null,
+    dpiStages: null,
+    idleTime: null,
+    lowBatteryThreshold: null,
+    pollingRate: null,
+    supportedPollingRates: []
+  }))
+}));
 
 beforeEach(() => {
   const values = new Map<string, string>();
+  commandMock.mockReset();
+  commandMock.mockResolvedValue({
+    commandClass: 0x07,
+    commandId: 0x80,
+    raw: new Uint8Array(),
+    status: 0,
+    success: true,
+    transactionId: 1,
+    value: 230
+  });
+
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockImplementation(() => ({
+      addEventListener: vi.fn(),
+      matches: false,
+      removeEventListener: vi.fn()
+    }))
+  });
 
   Object.defineProperty(window, "localStorage", {
     configurable: true,
@@ -23,6 +93,81 @@ beforeEach(() => {
         values.set(key, value);
       }
     }
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("charging battery refresh", () => {
+  it("refreshes battery every 30 seconds while the connected device is charging", async () => {
+    vi.useFakeTimers();
+    const container = document.createElement("div");
+    let root: Root | null = null;
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    commandMock.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CHARGING_BATTERY_REFRESH_INTERVAL_MS);
+    });
+
+    expect(commandMock).toHaveBeenCalledTimes(1);
+    expect(commandMock.mock.calls[0]?.[0].commandName).toBe("Read battery");
+
+    await act(async () => {
+      root?.unmount();
+    });
+  });
+
+  it("does not refresh battery every 30 seconds when the connected device is not charging", async () => {
+    vi.mocked(runCapabilityProbe).mockResolvedValueOnce({
+      advancedSettings: null,
+      battery: { rawBattery: 204, percent: 80 },
+      buttonMappings: null,
+      buttonProtocol: "official-obm",
+      capabilities: createInitialCapabilities(),
+      charging: { rawCharging: 0, isCharging: false },
+      dpi: null,
+      dpiStages: null,
+      idleTime: null,
+      lowBatteryThreshold: null,
+      pollingRate: null,
+      supportedPollingRates: []
+    });
+    vi.useFakeTimers();
+    const container = document.createElement("div");
+    let root: Root | null = null;
+
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    commandMock.mockClear();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CHARGING_BATTERY_REFRESH_INTERVAL_MS);
+    });
+
+    expect(commandMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root?.unmount();
+    });
   });
 });
 

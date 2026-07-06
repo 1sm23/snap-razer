@@ -16,7 +16,7 @@ import {
 } from "./domain/capabilities";
 import { runCapabilityProbe } from "./domain/capabilityProbe";
 import type { CapabilityMap, ConnectedDevice, HidLogEntry, LocalizedMessage } from "./domain/types";
-import type { BatteryResult, ChargingResult } from "./features/batteryAdapter";
+import { readBattery, type BatteryResult, type ChargingResult } from "./features/batteryAdapter";
 import {
   createDefaultButtonMappings,
   getButtonProtocol,
@@ -66,6 +66,7 @@ const DEFAULT_DPI_STAGES: DpiStages = {
     { enabled: true, id: 5, x: 6400, y: 6400 }
   ]
 };
+export const CHARGING_BATTERY_REFRESH_INTERVAL_MS = 30000;
 const DPI_APPLY_DEBOUNCE_MS = 120;
 const DPI_HARDWARE_SYNC_INTERVAL_MS = 750;
 const AUTO_CONNECT_BLOCKED_STORAGE_KEY = "snap-razer-auto-connect-blocked";
@@ -267,6 +268,45 @@ export default function App() {
       window.clearInterval(intervalId);
     };
   }, [device, transport]);
+
+  useEffect(() => {
+    if (!device?.featureReportProbeAllowed || charging?.isCharging !== true) {
+      return;
+    }
+
+    let stopped = false;
+    let refreshInFlight = false;
+
+    const refreshBatteryWhileCharging = async () => {
+      if (stopped || refreshInFlight || manualCommandInProgressRef.current) {
+        return;
+      }
+
+      refreshInFlight = true;
+
+      try {
+        const refreshedBattery = await readBattery(transport.command);
+
+        if (stopped) {
+          return;
+        }
+
+        setBattery(refreshedBattery);
+        setLogs(transport.snapshot().logs);
+      } catch {
+        // Charging refresh is opportunistic. Keep the last known battery value if a background read misses.
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const intervalId = window.setInterval(refreshBatteryWhileCharging, CHARGING_BATTERY_REFRESH_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+    };
+  }, [charging?.isCharging, device, transport]);
 
   const connect = useCallback(async (mode: "authorized" | "request"): Promise<boolean> => {
     const hasCurrentDevice = currentDeviceRef.current !== null;
@@ -664,6 +704,7 @@ export default function App() {
     <main className="appShell">
       <Header
         battery={battery}
+        charging={charging}
         device={device}
         hidSupported={hidSupported}
         connecting={connecting}

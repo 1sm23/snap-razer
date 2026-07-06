@@ -3,8 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { ConnectedDevice } from "../domain/types";
 import { Header } from "./Header";
 
+vi.mock("@iconify/react", () => ({
+  Icon: ({ className }: { className?: string }) => <span className={className} />
+}));
+
 const defaultProps = {
   battery: null,
+  charging: null,
   hidSupported: true,
   connecting: false,
   error: null,
@@ -55,6 +60,20 @@ describe("Header", () => {
     expect(html).toContain("Razer Test Mouse");
     expect(html).toContain("deviceBattery");
     expect(html).toContain("80%");
+  });
+
+  it("shows the charging battery icon next to the device name while charging", () => {
+    const html = renderToStaticMarkup(
+      <Header
+        {...defaultProps}
+        battery={{ rawBattery: 204, percent: 80 }}
+        charging={{ rawCharging: 1, isCharging: true }}
+        device={connectedDevice}
+      />
+    );
+
+    expect(html).toContain("deviceBatteryIconCharging");
+    expect(html).toContain("Battery 80% · Charging");
   });
 
   it("announces connection and error state changes", () => {
