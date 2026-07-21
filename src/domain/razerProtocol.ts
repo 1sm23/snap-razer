@@ -7,9 +7,11 @@ export const RAZER_COMMAND_CLASS_DEVICE = 0x07;
 export const WORKING_TRANSACTION_ID = 0x1f;
 export const BATTERY_COMMAND_ID = 0x80;
 export const CHARGING_COMMAND_ID = 0x84;
-export const RAZER_STATUS_SUCCESS = 0x02;
-export const RAZER_STATUS_NOT_SUPPORTED = 0x05;
 export const RAZER_STATUS_BUSY = 0x01;
+export const RAZER_STATUS_SUCCESS = 0x02;
+export const RAZER_STATUS_FAILURE = 0x03;
+export const RAZER_STATUS_TIMEOUT = 0x04;
+export const RAZER_STATUS_NOT_SUPPORTED = 0x05;
 export const RAZER_PAYLOAD_MAX_LENGTH = 80;
 
 export interface BuildRazerReportOptions {
@@ -18,6 +20,12 @@ export interface BuildRazerReportOptions {
   dataSize: number;
   transactionId?: number;
   payload?: Uint8Array;
+}
+
+export interface ParseRazerResponseOptions {
+  expectedCommandClass?: number;
+  expectedCommandId?: number;
+  expectedTransactionId?: number;
 }
 
 export function calculateRazerCrc(report: Uint8Array): number {
@@ -71,8 +79,11 @@ export function buildRazerReport(options: BuildRazerReportOptions): Uint8Array {
   return report;
 }
 
-export function parseRazerResponse(raw: Uint8Array): ProtocolResponse {
-  const response = normalizeRazerResponse(raw);
+export function parseRazerResponse(
+  raw: Uint8Array,
+  options: ParseRazerResponseOptions = {}
+): ProtocolResponse {
+  const response = normalizeRazerResponse(raw, options);
 
   if (response.length !== RAZER_REPORT_LENGTH) {
     throw new RangeError(`Razer response must be exactly ${RAZER_REPORT_LENGTH} bytes`);
@@ -89,26 +100,63 @@ export function parseRazerResponse(raw: Uint8Array): ProtocolResponse {
   };
 }
 
-function normalizeRazerResponse(raw: Uint8Array): Uint8Array {
+function normalizeRazerResponse(raw: Uint8Array, options: ParseRazerResponseOptions): Uint8Array {
   if (raw.length === RAZER_REPORT_LENGTH + 1 && raw[0] === RAZER_REPORT_ID) {
     return raw.slice(1);
   }
 
-  if (raw.length === RAZER_REPORT_LENGTH && raw[0] === RAZER_REPORT_ID && looksLikeShiftedRazerResponse(raw)) {
-    const response = new Uint8Array(RAZER_REPORT_LENGTH);
-    response.set(raw.slice(1));
-    return response;
+  if (raw.length !== RAZER_REPORT_LENGTH || raw[0] !== RAZER_REPORT_ID) {
+    return raw;
   }
 
-  return raw;
+  const shiftedResponse = shiftReportZeroResponse(raw);
+  const hasExpectedFields =
+    options.expectedCommandClass !== undefined ||
+    options.expectedCommandId !== undefined ||
+    options.expectedTransactionId !== undefined;
+
+  if (hasExpectedFields) {
+    const normalMatches = matchesExpectedResponse(raw, options);
+    const shiftedMatches = matchesExpectedResponse(shiftedResponse, options);
+
+    if (shiftedMatches && !normalMatches) {
+      return shiftedResponse;
+    }
+
+    if (normalMatches && !shiftedMatches) {
+      return raw;
+    }
+
+    if (shiftedMatches && normalMatches) {
+      return isKnownRazerStatus(raw[0]) ? raw : shiftedResponse;
+    }
+  }
+
+  return isKnownRazerStatus(raw[1]) && !isKnownRazerStatus(raw[0]) ? shiftedResponse : raw;
 }
 
-function looksLikeShiftedRazerResponse(raw: Uint8Array): boolean {
-  return isKnownRazerStatus(raw[1]) && raw[7] !== 0 && raw[8] !== 0;
+function shiftReportZeroResponse(raw: Uint8Array): Uint8Array {
+  const response = new Uint8Array(RAZER_REPORT_LENGTH);
+  response.set(raw.subarray(1));
+  return response;
+}
+
+function matchesExpectedResponse(response: Uint8Array, options: ParseRazerResponseOptions): boolean {
+  return (
+    (options.expectedCommandClass === undefined || response[6] === options.expectedCommandClass) &&
+    (options.expectedCommandId === undefined || response[7] === options.expectedCommandId) &&
+    (options.expectedTransactionId === undefined || response[1] === options.expectedTransactionId)
+  );
 }
 
 function isKnownRazerStatus(value: number): boolean {
-  return value === RAZER_STATUS_SUCCESS || value === RAZER_STATUS_BUSY;
+  return (
+    value === RAZER_STATUS_BUSY ||
+    value === RAZER_STATUS_SUCCESS ||
+    value === RAZER_STATUS_FAILURE ||
+    value === RAZER_STATUS_TIMEOUT ||
+    value === RAZER_STATUS_NOT_SUPPORTED
+  );
 }
 
 export function bytesToHex(bytes: Uint8Array): string {
@@ -121,9 +169,9 @@ export function formatRazerStatus(status: number): string {
       return "busy";
     case RAZER_STATUS_SUCCESS:
       return "success";
-    case 0x03:
+    case RAZER_STATUS_FAILURE:
       return "failure";
-    case 0x04:
+    case RAZER_STATUS_TIMEOUT:
       return "timeout";
     case RAZER_STATUS_NOT_SUPPORTED:
       return "not supported";

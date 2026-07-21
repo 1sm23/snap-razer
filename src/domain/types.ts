@@ -28,10 +28,13 @@ export interface ConnectedDevice {
   descriptorSummary: string;
 }
 
+export type ProtocolRequestKind = "read" | "write";
+
 export interface ProtocolRequest {
   reportId: number;
   commandName: string;
   bytes: Uint8Array;
+  kind?: ProtocolRequestKind;
   log?: boolean;
 }
 
