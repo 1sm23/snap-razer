@@ -39,7 +39,7 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "jsdom": "^29.0.0",
+    "jsdom": "^30.0.0",
     "vitest": "^4.1.7",
     "wrangler": "^4.95.0"
   }
