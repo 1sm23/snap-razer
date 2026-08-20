@@ -16,7 +16,7 @@
     "@fontsource-variable/nunito": "^5.2.7",
     "@fontsource/zcool-kuaile": "^5.2.8",
     "@iconify-icons/lucide": "^1.2.135",
-    "@iconify-icons/simple-icons": "^1.2.74",
+    "@iconify-icons/simple-icons": "^2.0.0",
     "@iconify/react": "^6.0.2",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-select": "^2.2.6",
